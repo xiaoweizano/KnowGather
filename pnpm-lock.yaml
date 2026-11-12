@@ -155,7 +155,7 @@ importers:
         version: link:vendor/workspace/tiptap__extension-link@3.32.2
       '@tiptap/extension-placeholder':
         specifier: file:vendor/workspace/tiptap__extension-placeholder@3.32.2
-        version: file:vendor/workspace/tiptap__extension-placeholder@3.32.2(@tiptap/extensions@file:vendor/workspace/tiptap__extensions@3.32.2(@tiptap/core@file:vendor/workspace/tiptap__core@3.32.2(@tiptap/pm@file:vendor/workspace/tiptap__pm@3.32.2))(@tiptap/pm@file:vendor/workspace/tiptap__pm@3.32.2))
+        version: file:vendor/workspace/tiptap__extension-placeholder@3.32.2(@tiptap/extensions@vendor+workspace+tiptap__extensions@3.32.2)
       '@tiptap/extension-table':
         specifier: file:vendor/workspace/tiptap__extension-table@3.32.2
         version: link:vendor/workspace/tiptap__extension-table@3.32.2
@@ -183,6 +183,9 @@ importers:
       '@tiptap/extension-underline':
         specifier: file:vendor/workspace/tiptap__extension-underline@3.32.2
         version: file:vendor/workspace/tiptap__extension-underline@3.32.2(@tiptap/core@file:vendor/workspace/tiptap__core@3.32.2(@tiptap/pm@file:vendor/workspace/tiptap__pm@3.32.2))
+      '@tiptap/extensions':
+        specifier: workspace:*
+        version: link:vendor/workspace/tiptap__extensions@3.32.2
       '@tiptap/pm':
         specifier: file:vendor/workspace/tiptap__pm@3.32.2
         version: link:vendor/workspace/tiptap__pm@3.32.2
@@ -4168,9 +4171,9 @@ snapshots:
     dependencies:
       '@tiptap/core': file:vendor/workspace/tiptap__core@3.32.2(@tiptap/pm@file:vendor/workspace/tiptap__pm@3.32.2)
 
-  '@tiptap/extension-placeholder@file:vendor/workspace/tiptap__extension-placeholder@3.32.2(@tiptap/extensions@file:vendor/workspace/tiptap__extensions@3.32.2(@tiptap/core@file:vendor/workspace/tiptap__core@3.32.2(@tiptap/pm@file:vendor/workspace/tiptap__pm@3.32.2))(@tiptap/pm@file:vendor/workspace/tiptap__pm@3.32.2))':
+  '@tiptap/extension-placeholder@file:vendor/workspace/tiptap__extension-placeholder@3.32.2(@tiptap/extensions@vendor+workspace+tiptap__extensions@3.32.2)':
     dependencies:
-      '@tiptap/extensions': file:vendor/workspace/tiptap__extensions@3.32.2(@tiptap/core@file:vendor/workspace/tiptap__core@3.32.2(@tiptap/pm@file:vendor/workspace/tiptap__pm@3.32.2))(@tiptap/pm@file:vendor/workspace/tiptap__pm@3.32.2)
+      '@tiptap/extensions': link:vendor/workspace/tiptap__extensions@3.32.2
 
   '@tiptap/extension-strike@file:vendor/workspace/tiptap__extension-strike@3.32.2(@tiptap/core@file:vendor/workspace/tiptap__core@3.32.2(@tiptap/pm@file:vendor/workspace/tiptap__pm@3.32.2))':
     dependencies:

@@ -1,0 +1,1 @@
+exports.setupDevtoolsPlugin=function(){return undefined};exports.addDevtools=function(){return undefined};exports.isPerformanceSupported=function(){return false};exports.now=function(){return Date.now()};

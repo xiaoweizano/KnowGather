@@ -1,0 +1,17 @@
+{
+  "name": "stackback",
+  "version": "0.0.2",
+  "description": "return list of CallSite objects from a captured stacktrace",
+  "main": "index.js",
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/shtylman/node-stackback.git"
+  },
+  "keywords": [
+    "stacktrace",
+    "trace",
+    "stack"
+  ],
+  "author": "Roman Shtylman <shtylman@gmail.com>",
+  "license": "MIT"
+}

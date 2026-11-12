@@ -1,0 +1,43 @@
+{
+  "name": "pathval",
+  "description": "Object value retrieval given a string path",
+  "homepage": "https://github.com/chaijs/pathval",
+  "version": "2.0.1",
+  "keywords": [
+    "pathval",
+    "value retrieval",
+    "chai util"
+  ],
+  "license": "MIT",
+  "author": "Veselin Todorov <hi@vesln.com>",
+  "files": [
+    "index.js"
+  ],
+  "main": "./index.js",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/chaijs/pathval.git"
+  },
+  "eslintConfig": {
+    "extends": [
+      "strict/es6"
+    ],
+    "parserOptions": {
+      "sourceType": "module"
+    },
+    "env": {
+      "es6": true
+    },
+    "globals": {
+      "HTMLElement": false
+    },
+    "rules": {
+      "complexity": 0,
+      "max-statements": 0
+    }
+  },
+  "engines": {
+    "node": ">= 14.16"
+  }
+}

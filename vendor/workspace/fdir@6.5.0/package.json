@@ -1,0 +1,54 @@
+{
+  "name": "fdir",
+  "version": "6.5.0",
+  "description": "The fastest directory crawler & globbing alternative to glob, fast-glob, & tiny-glob. Crawls 1m files in < 1s",
+  "main": "./dist/index.cjs",
+  "types": "./dist/index.d.cts",
+  "type": "module",
+  "engines": {
+    "node": ">=12.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/thecodrr/fdir.git"
+  },
+  "keywords": [
+    "util",
+    "os",
+    "sys",
+    "fs",
+    "walk",
+    "crawler",
+    "directory",
+    "files",
+    "io",
+    "tiny-glob",
+    "glob",
+    "fast-glob",
+    "speed",
+    "javascript",
+    "nodejs"
+  ],
+  "author": "thecodrr <thecodrr@protonmail.com>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/thecodrr/fdir/issues"
+  },
+  "homepage": "https://github.com/thecodrr/fdir#readme",
+  "peerDependencies": {
+    "picomatch": "^3 || ^4"
+  },
+  "peerDependenciesMeta": {
+    "picomatch": {
+      "optional": true
+    }
+  },
+  "module": "./dist/index.mjs",
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.cjs"
+    },
+    "./package.json": "./package.json"
+  }
+}

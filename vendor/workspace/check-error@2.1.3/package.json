@@ -1,0 +1,32 @@
+{
+  "name": "check-error",
+  "description": "Error comparison and information related utility for node and the browser",
+  "keywords": [
+    "check-error",
+    "error",
+    "chai util"
+  ],
+  "license": "MIT",
+  "author": "Jake Luer <jake@alogicalparadox.com> (http://alogicalparadox.com)",
+  "contributors": [
+    "David Losert (https://github.com/davelosert)",
+    "Keith Cirkel (https://github.com/keithamus)",
+    "Miroslav Bajtoš (https://github.com/bajtos)",
+    "Lucas Fernandes da Costa (https://github.com/lucasfcosta)"
+  ],
+  "files": [
+    "index.js",
+    "check-error.js"
+  ],
+  "type": "module",
+  "main": "./index.js",
+  "module": "./index.js",
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/chaijs/check-error.git"
+  },
+  "engines": {
+    "node": ">= 16"
+  },
+  "version": "2.1.3"
+}

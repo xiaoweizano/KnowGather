@@ -1,0 +1,30 @@
+{
+  "compilerOptions": {
+    "composite": true,
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "esModuleInterop": true,
+    "lib": [
+      "ES2022"
+    ],
+    "types": [
+      "node"
+    ],
+    "skipLibCheck": true,
+    "noEmit": true
+  },
+  "include": [
+    "vite.config.ts",
+    "vitest.config.ts",
+    "src/main/**/*.ts",
+    "src/preload/**/*.ts",
+    "src/shared/**/*.ts",
+    "scripts/**/*.mjs"
+  ]
+}

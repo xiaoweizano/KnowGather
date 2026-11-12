@@ -1,0 +1,14 @@
+{
+  "name": "@vue/devtools-api",
+  "version": "7.7.7",
+  "type": "module",
+  "main": "index.cjs",
+  "module": "index.js",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "import": "./index.js",
+      "require": "./index.cjs"
+    }
+  }
+}

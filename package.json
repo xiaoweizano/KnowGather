@@ -1,0 +1,88 @@
+{
+  "name": "shizhi",
+  "version": "0.1.0",
+  "private": true,
+  "description": "拾知个人知识管理桌面应用",
+  "main": "out/main/index.cjs",
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc --noEmit -p tsconfig.web.json && tsc --noEmit -p tsconfig.node.json",
+    "test": "vitest --config vitest.config.mjs --configLoader native",
+    "test:run": "vitest run --config vitest.config.mjs --configLoader native",
+    "smoke:p0": "node scripts/check-p0-smoke.mjs",
+    "smoke:p0:runtime": "node scripts/check-p0-smoke.mjs --runtime",
+    "preview": "node scripts/preview.mjs",
+    "test:e2e": "node scripts/e2e.mjs",
+    "package:win": "pnpm build && electron-builder --win nsis --x64 --publish never",
+    "package:dir": "pnpm build && electron-builder --win dir --x64"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/node": "file:vendor/types-node",
+    "@vitejs/plugin-vue": "file:vendor/vitejs-plugin-vue",
+    "electron": "^45.3.1",
+    "electron-builder": "^26.18.0",
+    "typescript": "file:vendor/workspace/typescript@5.9.3",
+    "vite": "7.0.0",
+    "vitest": "file:vendor/workspace/vitest@3.2.7",
+    "@floating-ui/dom": "1.8.0",
+    "@tiptap/core": "3.32.2",
+    "@tiptap/extension-color": "3.32.2",
+    "@tiptap/extension-image": "3.32.2",
+    "@tiptap/extension-link": "3.32.2",
+    "@tiptap/extension-placeholder": "3.32.2",
+    "@tiptap/extension-table": "3.32.2",
+    "@tiptap/extension-table-cell": "3.32.2",
+    "@tiptap/extension-table-header": "3.32.2",
+    "@tiptap/extension-table-row": "3.32.2",
+    "@tiptap/extension-task-item": "3.32.2",
+    "@tiptap/extension-task-list": "3.32.2",
+    "@tiptap/extension-text-align": "3.32.2",
+    "@tiptap/extension-text-style": "3.32.2",
+    "@tiptap/extension-underline": "3.32.2",
+    "@tiptap/pm": "3.32.2",
+    "@tiptap/starter-kit": "3.32.2",
+    "dompurify": "3.4.17",
+    "pinia": "file:vendor/pinia",
+    "vue": "3.5.45"
+  },
+  "build": {
+    "appId": "com.knowgather.shizhi",
+    "productName": "拾知",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "out/main/**/*",
+      "out/preload/**/*",
+      "out/renderer/**/*",
+      "package.json"
+    ],
+    "asar": true,
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "KnowGather-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "拾知"
+    }
+  },
+  "author": "KnowGather"
+}

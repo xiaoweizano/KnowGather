@@ -1,0 +1,415 @@
+.shizhi-editor {
+  color: #302d3e;
+  caret-color: #6555dc;
+  font-family: "Aptos", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI", sans-serif;
+  font-size: 16px;
+  line-height: 1.78;
+  letter-spacing: 0.012em;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  tab-size: 2;
+}
+
+.shizhi-editor,
+.shizhi-editor * {
+  box-sizing: border-box;
+}
+
+.shizhi-editor:focus,
+.shizhi-editor:focus-visible {
+  outline: none;
+}
+
+.shizhi-editor > * {
+  max-width: 100%;
+}
+
+.shizhi-editor p {
+  margin: 0 0 0.78em;
+  padding: 0;
+  line-height: 1.78;
+  font-size: 1rem;
+}
+
+.shizhi-editor p:last-child {
+  margin-bottom: 0;
+}
+
+.shizhi-editor h1,
+.shizhi-editor h2,
+.shizhi-editor h3,
+.shizhi-editor h4,
+.shizhi-editor h5,
+.shizhi-editor h6 {
+  color: #242132;
+  font-weight: 720;
+  line-height: 1.32;
+  letter-spacing: -0.025em;
+  margin: 1.55em 0 0.62em;
+  padding: 0;
+}
+
+.shizhi-editor h1 {
+  font-size: 1.72rem;
+}
+
+.shizhi-editor h2 {
+  font-size: 1.4rem;
+}
+
+.shizhi-editor h3 {
+  font-size: 1.18rem;
+}
+
+.shizhi-editor h4 {
+  font-size: 1.05rem;
+}
+
+.shizhi-editor h5,
+.shizhi-editor h6 {
+  font-size: 1rem;
+}
+
+.shizhi-editor > :first-child {
+  margin-top: 0;
+}
+
+.shizhi-editor ul,
+.shizhi-editor ol {
+  margin: 0.25em 0 1em;
+  padding-left: 1.62em;
+}
+
+.shizhi-editor li {
+  margin: 0.26em 0;
+  padding-left: 0.18em;
+  line-height: 1.72;
+}
+
+.shizhi-editor li > p {
+  margin: 0;
+}
+
+.shizhi-editor li::marker {
+  color: #7669bc;
+}
+
+.shizhi-editor blockquote {
+  position: relative;
+  margin: 1.18em 0 1.35em;
+  padding: 1.05em 1.25em 1.05em 1.45em;
+  border: 1px solid #ebe6ff;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #f8f5ff 0%, #f1efff 100%);
+  color: #4d4863;
+}
+
+.shizhi-editor blockquote::before {
+  position: absolute;
+  top: 12px;
+  bottom: 12px;
+  left: 0;
+  width: 4px;
+  border-radius: 0 4px 4px 0;
+  background: linear-gradient(180deg, #9b8cff, #7060e4);
+  content: "";
+}
+
+.shizhi-editor blockquote p:first-child {
+  color: #343044;
+  font-weight: 700;
+}
+
+.shizhi-editor blockquote p:last-child {
+  margin-bottom: 0;
+}
+
+.shizhi-editor a {
+  color: #6252db;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.shizhi-editor code {
+  padding: 0.15em 0.38em;
+  border: 1px solid #e7e2f2;
+  border-radius: 5px;
+  background: #f5f2fb;
+  color: #6955c8;
+  font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+  font-size: 0.88em;
+}
+
+.shizhi-editor pre {
+  margin: 1.05em 0 1.2em;
+  padding: 1em 1.15em;
+  border: 1px solid #e2deec;
+  border-radius: 11px;
+  background: #292635;
+  color: #f1edff;
+  overflow-x: auto;
+  font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+  font-size: 0.86rem;
+  line-height: 1.65;
+  white-space: pre-wrap;
+}
+
+.shizhi-editor pre code {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: inherit;
+}
+
+.shizhi-editor hr {
+  height: 1px;
+  margin: 2em 0;
+  border: 0;
+  background: linear-gradient(90deg, transparent, #dad5e9 15%, #dad5e9 85%, transparent);
+}
+
+.shizhi-editor img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 1.05em auto;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(55, 45, 89, 0.12);
+}
+
+.shizhi-editor img[data-align="left"] {
+  margin-right: auto;
+  margin-left: 0;
+}
+
+.shizhi-editor img[data-align="center"] {
+  margin-right: auto;
+  margin-left: auto;
+}
+
+.shizhi-editor img[data-align="right"] {
+  margin-right: 0;
+  margin-left: auto;
+}
+
+.shizhi-editor img.ProseMirror-selectednode {
+  outline: 3px solid rgba(121, 105, 232, 0.38);
+  outline-offset: 3px;
+}
+
+.shizhi-editor .shizhi-attachment-card {
+  display: flex;
+  width: fit-content;
+  max-width: 100%;
+  align-items: center;
+  gap: 0.45em;
+  margin: 0.85em 0;
+  padding: 0.62em 0.85em;
+  border: 1px solid #e5e0f0;
+  border-radius: 9px;
+  background: #f8f6fd;
+  color: #5f52bd;
+  font-size: 0.88rem;
+  text-decoration: none;
+}
+
+.shizhi-editor .shizhi-attachment-card::before {
+  content: "↗";
+  font-weight: 700;
+}
+
+.shizhi-editor .shizhi-attachment-card.ProseMirror-selectednode {
+  border-color: #9e91f1;
+  box-shadow: 0 0 0 3px rgba(121, 105, 232, 0.13);
+}
+
+.shizhi-editor table {
+  width: 100%;
+  margin: 1.1em 0;
+  border-collapse: separate;
+  border-spacing: 0;
+  border: 1px solid #e3dfed;
+  border-radius: 10px;
+  overflow: hidden;
+  table-layout: fixed;
+}
+
+.shizhi-editor th,
+.shizhi-editor td {
+  position: relative;
+  min-width: 80px;
+  padding: 0.62em 0.75em;
+  border-right: 1px solid #e7e3ef;
+  border-bottom: 1px solid #e7e3ef;
+  vertical-align: top;
+  text-align: left;
+}
+
+.shizhi-editor th:last-child,
+.shizhi-editor td:last-child {
+  border-right: 0;
+}
+
+.shizhi-editor tr:last-child td {
+  border-bottom: 0;
+}
+
+.shizhi-editor th {
+  background: #f6f3fd;
+  color: #4b4560;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.shizhi-editor .selectedCell::after {
+  position: absolute;
+  inset: 0;
+  background: rgba(121, 105, 232, 0.13);
+  pointer-events: none;
+  content: "";
+}
+
+.shizhi-editor .column-resize-handle {
+  position: absolute;
+  top: 0;
+  right: -2px;
+  bottom: 0;
+  width: 4px;
+  background: #8d7ee9;
+  pointer-events: none;
+}
+
+.shizhi-editor ul[data-type="taskList"] {
+  margin: 0.9em 0 1.1em;
+  padding: 0;
+  list-style: none;
+}
+
+.shizhi-editor ul[data-type="taskList"] li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.62em;
+  margin: 0.5em 0;
+  padding: 0;
+}
+
+.shizhi-editor ul[data-type="taskList"] li > label {
+  display: flex;
+  align-items: center;
+  height: 1.78em;
+  flex: 0 0 auto;
+  user-select: none;
+}
+
+.shizhi-editor ul[data-type="taskList"] li > label input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: #7666e8;
+}
+
+.shizhi-editor ul[data-type="taskList"] li > div {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.shizhi-editor ul[data-type="taskList"] li[data-checked="true"] > div {
+  color: #918ca2;
+  text-decoration: line-through;
+}
+
+.shizhi-editor mark {
+  padding: 0.08em 0.16em;
+  border-radius: 3px;
+  background: #fff0a8;
+  color: inherit;
+}
+
+.shizhi-editor .is-editor-empty:first-child::before {
+  height: 0;
+  color: #aaa6b9;
+  content: attr(data-placeholder);
+  float: left;
+  pointer-events: none;
+}
+
+.shizhi-editor p.is-editor-empty:first-child::before {
+  color: #aaa6b9;
+}
+
+.shizhi-editor ::selection {
+  background: #ded9ff;
+}
+
+.shizhi-editor [style*="text-align: center"] {
+  text-align: center;
+}
+
+.shizhi-editor [style*="text-align: right"] {
+  text-align: right;
+}
+
+.shizhi-editor [style*="text-align: justify"] {
+  text-align: justify;
+}
+
+:root[data-theme="dark"] .shizhi-editor {
+  color: #ded9eb;
+  caret-color: #b2a7ff;
+}
+
+:root[data-theme="dark"] .shizhi-editor h1,
+:root[data-theme="dark"] .shizhi-editor h2,
+:root[data-theme="dark"] .shizhi-editor h3,
+:root[data-theme="dark"] .shizhi-editor h4,
+:root[data-theme="dark"] .shizhi-editor h5,
+:root[data-theme="dark"] .shizhi-editor h6 {
+  color: #f2eefc;
+}
+
+:root[data-theme="dark"] .shizhi-editor blockquote {
+  border-color: #3a3452;
+  background: linear-gradient(135deg, #29243e 0%, #252136 100%);
+  color: #c9c3d8;
+}
+
+:root[data-theme="dark"] .shizhi-editor blockquote p:first-child {
+  color: #e8e2f7;
+}
+
+:root[data-theme="dark"] .shizhi-editor code {
+  border-color: #3a3448;
+  background: #292432;
+  color: #c6baff;
+}
+
+:root[data-theme="dark"] .shizhi-editor table {
+  border-color: #3a3448;
+}
+
+:root[data-theme="dark"] .shizhi-editor th,
+:root[data-theme="dark"] .shizhi-editor td {
+  border-color: #3a3448;
+}
+
+:root[data-theme="dark"] .shizhi-editor th {
+  background: #29243a;
+  color: #e4dff1;
+}
+
+:root[data-theme="dark"] .shizhi-editor .shizhi-attachment-card {
+  border-color: #3a3448;
+  background: #29243a;
+  color: #c6baff;
+}
+
+:root[data-theme="dark"] .shizhi-editor a {
+  color: #b5a9ff;
+}
+
+:root[data-theme="dark"] .shizhi-editor ::selection {
+  background: #51498b;
+}

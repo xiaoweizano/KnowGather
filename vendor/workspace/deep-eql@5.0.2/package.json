@@ -1,0 +1,46 @@
+{
+  "name": "deep-eql",
+  "version": "5.0.2",
+  "description": "Improved deep equality testing for Node.js and the browser.",
+  "keywords": [
+    "chai util",
+    "deep equal",
+    "object equal",
+    "testing"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:chaijs/deep-eql.git"
+  },
+  "license": "MIT",
+  "author": "Jake Luer <jake@alogicalparadox.com>",
+  "contributors": [
+    "Keith Cirkel (https://github.com/keithamus)",
+    "dougluce (https://github.com/dougluce)",
+    "Lorenz Leutgeb (https://github.com/flowlo)"
+  ],
+  "type": "module",
+  "main": "./index.js",
+  "files": [
+    "index.js",
+    "deep-eql.js"
+  ],
+  "eslintConfig": {
+    "extends": [
+      "strict/es5"
+    ],
+    "rules": {
+      "complexity": 0,
+      "no-underscore-dangle": 0,
+      "no-use-before-define": 0,
+      "spaced-comment": 0
+    },
+    "parserOptions": {
+      "sourceType": "module",
+      "ecmaVersion": 2015
+    }
+  },
+  "engines": {
+    "node": ">=6"
+  }
+}

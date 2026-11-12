@@ -1,0 +1,127 @@
+{
+  "name": "rollup",
+  "version": "4.67.5",
+  "description": "Next-generation ES module bundler",
+  "main": "dist/rollup.js",
+  "module": "dist/es/rollup.js",
+  "types": "dist/rollup.d.ts",
+  "bin": {
+    "rollup": "dist/bin/rollup"
+  },
+  "napi": {
+    "binaryName": "rollup",
+    "packageName": "@rollup/rollup",
+    "targets": [
+      "aarch64-apple-darwin",
+      "aarch64-linux-android",
+      "aarch64-pc-windows-msvc",
+      "aarch64-unknown-freebsd",
+      "aarch64-unknown-linux-gnu",
+      "aarch64-unknown-linux-musl",
+      "armv7-linux-androideabi",
+      "armv7-unknown-linux-gnueabihf",
+      "armv7-unknown-linux-musleabihf",
+      "i686-pc-windows-msvc",
+      "loongarch64-unknown-linux-gnu",
+      "loongarch64-unknown-linux-musl",
+      "riscv64gc-unknown-linux-gnu",
+      "riscv64gc-unknown-linux-musl",
+      "powerpc64le-unknown-linux-gnu",
+      "powerpc64le-unknown-linux-musl",
+      "s390x-unknown-linux-gnu",
+      "x86_64-apple-darwin",
+      "x86_64-linux-android",
+      "x86_64-pc-windows-gnu",
+      "x86_64-pc-windows-msvc",
+      "x86_64-unknown-freebsd",
+      "x86_64-unknown-linux-gnu",
+      "x86_64-unknown-linux-musl",
+      "x86_64-unknown-openbsd",
+      "aarch64-unknown-linux-ohos"
+    ]
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rollup/rollup.git"
+  },
+  "keywords": [
+    "modules",
+    "bundler",
+    "bundling",
+    "es6",
+    "optimizer"
+  ],
+  "author": "Rich Harris",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/rollup/rollup/issues"
+  },
+  "homepage": "https://rollupjs.org/",
+  "optionalDependencies": {
+    "@rollup/rollup-win32-x64-gnu": "4.67.5",
+    "@rollup/rollup-win32-x64-msvc": "4.67.5"
+  },
+  "dependencies": {
+    "@types/estree": "^1.0.10"
+  },
+  "devDependenciesComments": {
+    "core-js": "We only update manually as every update requires a snapshot update"
+  },
+  "overrides": {
+    "axios": "^1.20.0",
+    "esbuild": ">0.24.2",
+    "lodash-es": ">4.17.22",
+    "path-scurry": {
+      "lru-cache": ">=11.0.0"
+    },
+    "readable-stream": "npm:@built-in/readable-stream@1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "semver": "^7.8.5",
+    "tar": ">7.5.6",
+    "vite": "$vite"
+  },
+  "comments": {
+    "vue-tsc": "This is necessary so that prettier-plugin-organize-imports works correctly in Vue templatges",
+    "@emnapi/core": "If missing this fails npm install for Linux ARM",
+    "@emnapi/runtime": "If missing this fails npm install for Linux ARM",
+    "@napi-rs/lzma-linux-x64-gnu": "If missing, napi build --use-napi-cross silently skips the cross toolchain and links against the host glibc (#6461)",
+    "react": "If missing this fails npm install for Linux ARM",
+    "react-dom": "If missing this fails npm install for Linux ARM"
+  },
+  "files": [
+    "dist/*.node",
+    "dist/**/*.js",
+    "dist/*.d.ts",
+    "dist/bin/rollup",
+    "dist/es/package.json"
+  ],
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/rollup.d.ts",
+      "import": "./dist/es/rollup.js",
+      "require": "./dist/rollup.js"
+    },
+    "./loadConfigFile": {
+      "types": "./dist/loadConfigFile.d.ts",
+      "require": "./dist/loadConfigFile.js",
+      "default": "./dist/loadConfigFile.js"
+    },
+    "./getLogFilter": {
+      "types": "./dist/getLogFilter.d.ts",
+      "import": "./dist/es/getLogFilter.js",
+      "require": "./dist/getLogFilter.js"
+    },
+    "./parseAst": {
+      "types": "./dist/parseAst.d.ts",
+      "import": "./dist/es/parseAst.js",
+      "require": "./dist/parseAst.js"
+    },
+    "./dist/*": "./dist/*",
+    "./package.json": "./package.json"
+  }
+}

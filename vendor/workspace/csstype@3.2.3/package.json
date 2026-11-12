@@ -1,0 +1,26 @@
+{
+  "name": "csstype",
+  "version": "3.2.3",
+  "main": "",
+  "types": "index.d.ts",
+  "description": "Strict TypeScript and Flow types for style based on MDN data",
+  "repository": "https://github.com/frenic/csstype",
+  "author": "Fredrik Nicol <fredrik.nicol@gmail.com>",
+  "license": "MIT",
+  "overrides": {
+    "js-yaml": ">=4.1.1"
+  },
+  "files": [
+    "index.d.ts",
+    "index.js.flow"
+  ],
+  "keywords": [
+    "css",
+    "style",
+    "typescript",
+    "flow",
+    "typings",
+    "types",
+    "definitions"
+  ]
+}

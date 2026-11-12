@@ -1,0 +1,127 @@
+{
+  "name": "vite",
+  "version": "7.0.0",
+  "type": "module",
+  "license": "MIT",
+  "author": "Evan You",
+  "description": "Native-ESM powered web dev build tool",
+  "bin": {
+    "vite": "bin/vite.js"
+  },
+  "keywords": [
+    "frontend",
+    "framework",
+    "hmr",
+    "dev-server",
+    "build-tool",
+    "vite"
+  ],
+  "main": "./dist/node/index.js",
+  "types": "./dist/node/index.d.ts",
+  "exports": {
+    ".": "./dist/node/index.js",
+    "./client": {
+      "types": "./client.d.ts"
+    },
+    "./module-runner": "./dist/node/module-runner.js",
+    "./dist/client/*": "./dist/client/*",
+    "./types/*": {
+      "types": "./types/*"
+    },
+    "./types/internal/*": null,
+    "./package.json": "./package.json"
+  },
+  "typesVersions": {
+    "*": {
+      "module-runner": [
+        "dist/node/module-runner.d.ts"
+      ]
+    }
+  },
+  "imports": {
+    "#module-sync-enabled": {
+      "module-sync": "./misc/true.js",
+      "default": "./misc/false.js"
+    }
+  },
+  "files": [
+    "bin",
+    "dist",
+    "misc/**/*.js",
+    "client.d.ts",
+    "index.cjs",
+    "index.d.cts",
+    "types"
+  ],
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vitejs/vite.git",
+    "directory": "packages/vite"
+  },
+  "bugs": {
+    "url": "https://github.com/vitejs/vite/issues"
+  },
+  "homepage": "https://vite.dev",
+  "funding": "https://github.com/vitejs/vite?sponsor=1",
+  "//": "READ CONTRIBUTING.md to understand what to put under deps vs. devDeps!",
+  "dependencies": {
+    "esbuild": "^0.25.0",
+    "fdir": "^6.4.6",
+    "picomatch": "^4.0.2",
+    "postcss": "^8.5.6",
+    "rollup": "^4.40.0",
+    "tinyglobby": "^0.2.14"
+  },
+  "optionalDependencies": {},
+  "peerDependencies": {
+    "@types/node": "^20.19.0 || >=22.12.0",
+    "jiti": ">=1.21.0",
+    "less": "^4.0.0",
+    "lightningcss": "^1.21.0",
+    "sass": "^1.70.0",
+    "sass-embedded": "^1.70.0",
+    "stylus": ">=0.54.8",
+    "sugarss": "^5.0.0",
+    "terser": "^5.16.0",
+    "tsx": "^4.8.1",
+    "yaml": "^2.4.2"
+  },
+  "peerDependenciesMeta": {
+    "@types/node": {
+      "optional": true
+    },
+    "jiti": {
+      "optional": true
+    },
+    "sass": {
+      "optional": true
+    },
+    "sass-embedded": {
+      "optional": true
+    },
+    "stylus": {
+      "optional": true
+    },
+    "less": {
+      "optional": true
+    },
+    "sugarss": {
+      "optional": true
+    },
+    "lightningcss": {
+      "optional": true
+    },
+    "terser": {
+      "optional": true
+    },
+    "tsx": {
+      "optional": true
+    },
+    "yaml": {
+      "optional": true
+    }
+  }
+}

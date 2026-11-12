@@ -1,0 +1,64 @@
+{
+  "name": "cac",
+  "version": "6.7.14",
+  "description": "Simple yet powerful framework for building command-line apps.",
+  "repository": {
+    "url": "egoist/cac",
+    "type": "git"
+  },
+  "main": "index-compat.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./index-compat.js"
+    },
+    "./package.json": "./package.json",
+    "./*": "./*"
+  },
+  "files": [
+    "dist",
+    "!**/__test__/**",
+    "/mod.js",
+    "/mod.ts",
+    "/deno",
+    "/index-compat.js"
+  ],
+  "author": "egoist <0x142857@gmail.com>",
+  "license": "MIT",
+  "engines": {
+    "node": ">=8"
+  },
+  "release": {
+    "branch": "master"
+  },
+  "config": {
+    "commitizen": {
+      "path": "./node_modules/cz-conventional-changelog"
+    }
+  },
+  "lint-staged": {
+    "linters": {
+      "*.{js,json,ts}": [
+        "prettier --write",
+        "git add"
+      ],
+      "*.md": [
+        "markdown-toc -i",
+        "prettier --write",
+        "git add"
+      ]
+    },
+    "ignore": [
+      "dist/**",
+      "mod.js"
+    ]
+  },
+  "husky": {
+    "hooks": {
+      "pre-commit": "npm t && lint-staged"
+    }
+  }
+}

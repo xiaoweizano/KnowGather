@@ -1,0 +1,36 @@
+{
+  "name": "loupe",
+  "version": "3.2.1",
+  "description": "Inspect utility for Node.js and browsers",
+  "homepage": "https://github.com/chaijs/loupe",
+  "license": "MIT",
+  "author": "Veselin Todorov <hi@vesln.com>",
+  "contributors": [
+    "Keith Cirkel (https://github.com/keithamus)"
+  ],
+  "type": "module",
+  "main": "./lib/index.js",
+  "module": "./lib/index.js",
+  "browser": {
+    "./index.js": "./loupe.js",
+    "util": false
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/chaijs/loupe"
+  },
+  "files": [
+    "loupe.js",
+    "lib/*"
+  ],
+  "prettier": {
+    "printWidth": 120,
+    "tabWidth": 2,
+    "useTabs": false,
+    "semi": false,
+    "singleQuote": true,
+    "trailingComma": "es5",
+    "arrowParens": "avoid",
+    "bracketSpacing": true
+  }
+}

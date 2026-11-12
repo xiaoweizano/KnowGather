@@ -1,0 +1,21 @@
+{
+  "name": "esbuild",
+  "version": "0.25.12",
+  "description": "An extremely fast JavaScript and CSS bundler and minifier.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/evanw/esbuild.git"
+  },
+  "main": "lib/main.js",
+  "types": "lib/main.d.ts",
+  "engines": {
+    "node": ">=18"
+  },
+  "bin": {
+    "esbuild": "bin/esbuild"
+  },
+  "optionalDependencies": {
+    "@esbuild/win32-x64": "0.25.12"
+  },
+  "license": "MIT"
+}

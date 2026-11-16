@@ -1,15 +1,28 @@
 import type { ShizhiApi } from '../../../shared/api'
+import { detectDesktopPlatform } from '../../../shared/platform'
 import type { AttachmentReference, DocumentRecord, DocumentSavePayload, SaveReceipt } from '../../../shared/document'
 import { BrowserDocumentRepository } from './documentRepository'
 
 const browserRepository = new BrowserDocumentRepository()
 
 const browserApi: ShizhiApi = {
+  platform: detectDesktopPlatform(navigator.platform, navigator.userAgent),
   documents: {
     list: () => browserRepository.list(),
     get: (id) => browserRepository.get(id),
     save: (payload) => browserRepository.save(payload),
     remove: (id) => browserRepository.remove(id),
+  },
+  categories: {
+    list: () => browserRepository.listCategories(),
+    save: (payload) => browserRepository.saveCategory(payload),
+    remove: (id) => browserRepository.removeCategory(id),
+  },
+  journals: {
+    list: () => browserRepository.listJournals(),
+    get: (id) => browserRepository.getJournal(id),
+    save: (payload) => browserRepository.saveJournal(payload),
+    remove: (id) => browserRepository.removeJournal(id),
   },
   attachments: {
     pickImages: () => pickBrowserFiles('image/*'),
@@ -52,4 +65,3 @@ async function pickBrowserFiles(accept?: string): Promise<AttachmentReference[]>
 }
 
 export type { DocumentRecord, DocumentSavePayload, SaveReceipt }
-

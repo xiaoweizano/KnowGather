@@ -169,6 +169,7 @@ const demoContent = {
 export const DEMO_DOCUMENTS: DocumentRecord[] = [
   {
   "id": "doc-shizhi-design",
+  "categoryId": null,
   "title": "拾知产品设计思路",
   "tags": [
     "产品设计",
@@ -347,6 +348,7 @@ export const DEMO_DOCUMENTS: DocumentRecord[] = [
 },
   {
   "id": "doc-tiptap-optimize",
+  "categoryId": null,
   "title": "Tiptap 编辑器优化方案",
   "tags": [
     "技术笔记",
@@ -386,6 +388,7 @@ export const DEMO_DOCUMENTS: DocumentRecord[] = [
 },
   {
   "id": "doc-2026-plan",
+  "categoryId": null,
   "title": "2026 年工作计划",
   "tags": [
     "计划"
@@ -463,6 +466,7 @@ export const DEMO_DOCUMENTS: DocumentRecord[] = [
 },
   {
   "id": "doc-travel",
+  "categoryId": null,
   "title": "旅行计划与攻略",
   "tags": [
     "生活随笔"
@@ -501,6 +505,7 @@ export const DEMO_DOCUMENTS: DocumentRecord[] = [
 },
   {
   "id": "doc-problems",
+  "categoryId": null,
   "title": "问题与解决方案汇总",
   "tags": [
     "工作笔记"

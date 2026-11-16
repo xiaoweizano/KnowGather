@@ -1,13 +1,22 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed } from 'vue'
 import AppIcon from './AppIcon.vue'
 import ShizhiMascot from './ShizhiMascot.vue'
 import { useUiStore } from '../stores/ui'
+import { useDocumentStore } from '../stores/document'
+import { getShizhiApi } from '../services/api'
+import { showTrafficLights } from '../../../shared/platform'
+import { countJournalsForLocalDate, type NavigationKey } from '../app/knowledgeNavigation'
+
+defineProps<{ activeItem: NavigationKey }>()
+const emit = defineEmits<{ navigate: [key: NavigationKey] }>()
 
 const ui = useUiStore()
-const activeItem = ref('library')
+const documentStore = useDocumentStore()
+const platform = getShizhiApi().platform
+const todayJournalCount = computed(() => countJournalsForLocalDate(documentStore.journals))
 
-const navigation = [
+const navigation: Array<{ id: NavigationKey; label: string; icon: string }> = [
   { id: 'home', label: '首页', icon: 'home' },
   { id: 'library', label: '知识库', icon: 'library' },
   { id: 'journal', label: '日志', icon: 'journal' },
@@ -18,13 +27,13 @@ const navigation = [
 
 <template>
   <aside class="navigation-rail" aria-label="主导航">
-    <div class="window-controls" aria-hidden="true">
+    <div v-if="showTrafficLights(platform)" class="window-controls" aria-hidden="true">
       <span class="window-dot dot-red" />
       <span class="window-dot dot-amber" />
       <span class="window-dot dot-green" />
     </div>
 
-    <button class="brand" type="button" title="拾知首页" @click="activeItem = 'home'">
+    <button class="brand" type="button" title="拾知首页" @click="emit('navigate', 'home')">
       <span class="brand-mark">
         <svg viewBox="0 0 32 32" aria-hidden="true">
           <path d="M9 7.5h14v17H9z" fill="currentColor" opacity=".2" />
@@ -46,7 +55,7 @@ const navigation = [
         :class="{ active: activeItem === item.id }"
         type="button"
         :title="item.label"
-        @click="activeItem = item.id"
+        @click="emit('navigate', item.id)"
       >
         <span class="navigation-icon"><AppIcon :name="item.icon" :size="19" /></span>
         <span v-if="!ui.navigationCollapsed" class="navigation-label">{{ item.label }}</span>
@@ -61,7 +70,7 @@ const navigation = [
       <div v-if="!ui.navigationCollapsed" class="companion-copy">
         <span class="companion-heart">♥</span>
         <span>今日已记录</span>
-        <strong>+1</strong>
+        <strong>+{{ todayJournalCount }}</strong>
         <small>继续加油哦～</small>
       </div>
     </section>

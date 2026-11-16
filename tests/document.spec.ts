@@ -35,9 +35,9 @@ describe('document JSON contract', () => {
     expect(normalizeDocumentJson(cloned)).toEqual(source)
   })
 
-  it('falls back to one paragraph for corrupted JSON', () => {
-    expect(normalizeDocumentJson({ type: 'paragraph', content: [] })).toEqual(EMPTY_DOCUMENT)
-    expect(normalizeDocumentJson({ type: 'doc', content: [null, 'bad'] })).toEqual(EMPTY_DOCUMENT)
+  it('rejects corrupted JSON instead of silently replacing user content', () => {
+    expect(() => normalizeDocumentJson({ type: 'paragraph', content: [] })).toThrow(/Invalid Tiptap/)
+    expect(() => normalizeDocumentJson({ type: 'doc', content: [null, 'bad'] })).toThrow(/Invalid Tiptap/)
   })
 
   it('creates document records with explicit version fields and a safe title', () => {
@@ -52,6 +52,7 @@ describe('document JSON contract', () => {
     expect(record.revision).toBe(0)
     expect(record.version).toBe(1)
     expect(record.deletedAt).toBeNull()
+    expect(record.categoryId).toBeNull()
     expect(record.tags).toEqual([])
   })
 })

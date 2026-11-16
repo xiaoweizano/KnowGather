@@ -19,6 +19,7 @@ export type TiptapDocument = {
 export interface DocumentRecord {
   id: string
   title: string
+  categoryId: string | null
   tags: string[]
   content: TiptapDocument
   revision: number
@@ -31,8 +32,43 @@ export interface DocumentRecord {
 export interface DocumentSavePayload {
   id: string
   title: string
+  categoryId: string | null
   tags: string[]
   content: TiptapDocument
+  revision: number
+  version: number
+}
+
+export interface CategoryRecord {
+  id: string
+  name: string
+  createdAt: string
+  updatedAt: string
+  deletedAt: string | null
+}
+
+export interface CategorySavePayload {
+  id?: string
+  name: string
+}
+
+export interface JournalRecord {
+  id: string
+  title: string
+  content: TiptapDocument
+  categoryId: string | null
+  revision: number
+  version: number
+  createdAt: string
+  updatedAt: string
+  deletedAt: string | null
+}
+
+export interface JournalSavePayload {
+  id: string
+  title: string
+  content: TiptapDocument
+  categoryId: string | null
   revision: number
   version: number
 }
@@ -61,20 +97,16 @@ export function cloneDocumentJson(content: TiptapDocument): TiptapDocument {
 }
 
 export function normalizeDocumentJson(input: unknown): TiptapDocument {
-  if (!isRecord(input) || input.type !== 'doc' || !Array.isArray(input.content)) {
-    return cloneDocumentJson(EMPTY_DOCUMENT)
+  if (!isTiptapDocument(input)) {
+    throw new TypeError('Invalid Tiptap document JSON')
   }
-
-  const content = input.content.filter(isTiptapNode)
-  return {
-    type: 'doc',
-    content: content.length > 0 ? content : [{ type: 'paragraph' }],
-  }
+  return cloneDocumentJson(input)
 }
 
 export function createDocumentRecord(input: {
   id: string
   title: string
+  categoryId?: string | null
   content: TiptapDocument
   tags?: string[]
   now?: string
@@ -83,6 +115,7 @@ export function createDocumentRecord(input: {
   return {
     id: input.id,
     title: input.title.trim() || '无标题文档',
+    categoryId: input.categoryId ?? null,
     tags: input.tags ? [...input.tags] : [],
     content: normalizeDocumentJson(input.content),
     revision: 0,
@@ -94,17 +127,26 @@ export function createDocumentRecord(input: {
 }
 
 export function isTiptapDocument(value: unknown): value is TiptapDocument {
-  return isRecord(value) && value.type === 'doc' && Array.isArray(value.content)
+  if (!isRecord(value) || value.type !== 'doc' || !Array.isArray(value.content)) return false
+  return value.content.every(isTiptapNode)
 }
 
-function isTiptapNode(value: unknown): value is TiptapNode {
-  if (!isRecord(value) || typeof value.type !== 'string') return false
-  if ('text' in value && typeof value.text !== 'string') return false
+export function isTiptapNode(value: unknown): value is TiptapNode {
+  if (!isRecord(value) || typeof value.type !== 'string' || value.type.trim().length === 0) return false
+  if ('text' in value && value.text !== undefined && typeof value.text !== 'string') return false
+  if ('attrs' in value && value.attrs !== undefined && value.attrs !== null && !isRecord(value.attrs)) return false
   if ('content' in value && value.content !== undefined) {
-    if (!Array.isArray(value.content)) return false
-    return value.content.every(isTiptapNode)
+    if (!Array.isArray(value.content) || !value.content.every(isTiptapNode)) return false
+  }
+  if ('marks' in value && value.marks !== undefined) {
+    if (!Array.isArray(value.marks) || !value.marks.every(isTiptapMark)) return false
   }
   return true
+}
+
+function isTiptapMark(value: unknown): value is TiptapMark {
+  if (!isRecord(value) || typeof value.type !== 'string' || value.type.trim().length === 0) return false
+  return !('attrs' in value) || value.attrs === undefined || isRecord(value.attrs)
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

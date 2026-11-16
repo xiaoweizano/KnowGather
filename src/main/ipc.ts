@@ -1,6 +1,10 @@
 import { BrowserWindow as ElectronBrowserWindow, dialog, type IpcMain, type OpenDialogOptions, type WebContents } from 'electron'
 import { IPC_CHANNELS, type ShizhiApi } from '../shared/api.js'
-import type { DocumentSavePayload } from '../shared/document.js'
+import {
+  validateCategorySavePayload,
+  validateDocumentSavePayload,
+  validateJournalSavePayload,
+} from '../shared/validation.js'
 import type { AttachmentStore } from './attachments.js'
 import { AtomicDocumentRepository } from './documentRepository.js'
 
@@ -16,9 +20,29 @@ export function registerIpcHandlers(
   ipcMain.handle(IPC_CHANNELS.documentsList, () => repository.list())
   ipcMain.handle(IPC_CHANNELS.documentsGet, (_event, id) => repository.get(assertString(id)))
   ipcMain.handle(IPC_CHANNELS.documentsSave, (_event, payload) =>
-    repository.save(assertSavePayload(payload)),
+    repository.save(validateDocumentSavePayload(payload)),
   )
   ipcMain.handle(IPC_CHANNELS.documentsRemove, (_event, id) => repository.remove(assertString(id)))
+
+  ipcMain.handle(IPC_CHANNELS.categoriesList, () => repository.listCategories())
+  ipcMain.handle(IPC_CHANNELS.categoriesSave, (_event, payload) =>
+    repository.saveCategory(validateCategorySavePayload(payload)),
+  )
+  ipcMain.handle(IPC_CHANNELS.categoriesRemove, (_event, id) =>
+    repository.removeCategory(assertString(id)),
+  )
+
+  ipcMain.handle(IPC_CHANNELS.journalsList, () => repository.listJournals())
+  ipcMain.handle(IPC_CHANNELS.journalsGet, (_event, id) =>
+    repository.getJournal(assertString(id)),
+  )
+  ipcMain.handle(IPC_CHANNELS.journalsSave, (_event, payload) =>
+    repository.saveJournal(validateJournalSavePayload(payload)),
+  )
+  ipcMain.handle(IPC_CHANNELS.journalsRemove, (_event, id) =>
+    repository.removeJournal(assertString(id)),
+  )
+
   ipcMain.handle(IPC_CHANNELS.attachmentsPickImages, async (event) => {
     if (!options?.attachments) return []
     const filePaths = await showAttachmentDialog(event.sender, true)
@@ -65,22 +89,4 @@ function assertBoolean(value: unknown): boolean {
   return value
 }
 
-function assertSavePayload(value: unknown): DocumentSavePayload {
-  if (typeof value !== 'object' || value === null) throw new TypeError('Invalid document payload')
-  const candidate = value as Partial<DocumentSavePayload>
-  if (
-    typeof candidate.id !== 'string' ||
-    typeof candidate.title !== 'string' ||
-    !Array.isArray(candidate.tags) ||
-    typeof candidate.revision !== 'number' ||
-    typeof candidate.version !== 'number' ||
-    typeof candidate.content !== 'object' ||
-    candidate.content === null
-  ) {
-    throw new TypeError('Invalid document payload')
-  }
-  return candidate as DocumentSavePayload
-}
-
 export type RendererApi = ShizhiApi
-

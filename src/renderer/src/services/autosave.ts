@@ -6,6 +6,7 @@ export interface AutoSaveState {
   phase: SavePhase
   revision: number
   savedRevision: number
+  savedVersion: number
   error: string | null
   lastSavedAt: string | null
 }
@@ -27,6 +28,7 @@ export class AutoSaveController {
     phase: 'idle',
     revision: 0,
     savedRevision: 0,
+    savedVersion: 0,
     error: null,
     lastSavedAt: null,
   }
@@ -59,10 +61,10 @@ export class AutoSaveController {
     this.clearTimer()
     if (this.inFlight) {
       await this.inFlight
-      if (!this.pending) return this.state.phase === 'saved'
+      if (!this.pending) return this.state.phase === 'saved' || this.state.phase === 'idle'
     }
 
-    if (!this.pending) return this.state.phase === 'saved'
+    if (!this.pending) return this.state.phase === 'saved' || this.state.phase === 'idle'
 
     const payload = this.pending
     this.pending = null
@@ -74,6 +76,7 @@ export class AutoSaveController {
         this.setState({
           phase: this.pending ? 'dirty' : 'saved',
           savedRevision: receipt.revision,
+          savedVersion: receipt.version,
           lastSavedAt: receipt.savedAt,
           error: null,
         })

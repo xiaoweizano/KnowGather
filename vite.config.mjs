@@ -6,17 +6,15 @@ import vue from '@vitejs/plugin-vue'
 import { compileScript, parse } from 'vue/compiler-sfc'
 
 function environmentWithoutEsbuild(mode) {
-  const envObject = JSON.stringify({
-    BASE_URL: '/',
-    MODE: mode,
-    DEV: mode !== 'production',
-    PROD: mode === 'production',
-    SSR: false,
-  })
+  let isServe = false
   return {
     name: 'shizhi-environment-without-esbuild',
     enforce: 'pre',
+    configResolved(config) {
+      isServe = config.command === 'serve'
+    },
     async resolveId(source, importer, options) {
+      if (isServe) return null
       if (source.startsWith('\0') || source.startsWith('node:')) return null
       const actualImporter = importer?.startsWith('\0shizhi-env:')
         ? importer.slice('\0shizhi-env:'.length)
@@ -26,13 +24,15 @@ function environmentWithoutEsbuild(mode) {
       const file = resolved.id.split('?')[0]
       if (
         !file ||
+        file.includes('/node_modules/vite/') ||
+        file.includes('\\node_modules\\vite\\') ||
         !/\.(?:[cm]?js|jsx|ts|tsx)$/i.test(file) ||
         (!file.includes('/node_modules/') && !file.includes('\\node_modules\\') && !file.includes('/vendor/') && !file.includes('\\vendor\\'))
       ) return null
       return `\0shizhi-env:${file}`
     },
     async load(id) {
-      if (!id.startsWith('\0shizhi-env:')) return null
+      if (isServe || !id.startsWith('\0shizhi-env:')) return null
       const file = id.slice('\0shizhi-env:'.length)
       const code = await readFile(file, 'utf8')
       return {
@@ -41,6 +41,15 @@ function environmentWithoutEsbuild(mode) {
       }
     },
     transform(code) {
+      if (isServe) {
+        if (!code.includes('process.env.NODE_ENV')) return null
+        return {
+          // Vue installs __VUE_HMR_RUNTIME__ only in development. The plugin is
+          // configured for production rewrites, but Vite serve must stay dev.
+          code: code.replaceAll('process.env.NODE_ENV', JSON.stringify('development')),
+          map: null,
+        }
+      }
       if (!code.includes('process.env') && !code.includes('import.meta.env') && !code.includes('import.meta.hot') && !code.includes('__DEFINES__')) return null
       return { code: rewriteEnvironment(code, 'production'), map: null }
     },
@@ -49,7 +58,7 @@ function environmentWithoutEsbuild(mode) {
 
 function rewriteEnvironment(code, mode) {
   const envObject = JSON.stringify({
-    BASE_URL: '/',
+    BASE_URL: './',
     MODE: mode,
     DEV: mode !== 'production',
     PROD: mode === 'production',
@@ -58,7 +67,7 @@ function rewriteEnvironment(code, mode) {
   return code
     .replaceAll('__DEFINES__', '({})')
     .replace(/import\.meta\.env\.([A-Z0-9_]+)/g, (_match, key) => {
-      const values = { BASE_URL: '/', MODE: mode, DEV: mode !== 'production', PROD: mode === 'production', SSR: false }
+      const values = { BASE_URL: './', MODE: mode, DEV: mode !== 'production', PROD: mode === 'production', SSR: false }
       return JSON.stringify(values[key])
     })
     .replaceAll('import.meta.hot', 'undefined')
@@ -71,6 +80,7 @@ function disableViteDefinePlugin() {
   return {
     name: 'shizhi-disable-vite-define',
     configResolved(config) {
+      if (config.command !== 'build') return
       const index = config.plugins.findIndex((plugin) => plugin.name === 'vite:define')
       if (index >= 0) config.plugins.splice(index, 1)
     },
@@ -140,6 +150,7 @@ function vueSfcWithoutEsbuild() {
   }
 }
 export default defineConfig({
+  base: './',
   keepProcessEnv: true,
   plugins: [disableViteDefinePlugin(), environmentWithoutEsbuild('production'), typescriptWithoutEsbuild(), vueSfcWithoutEsbuild(), vue()],
   esbuild: false,

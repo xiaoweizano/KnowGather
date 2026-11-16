@@ -11,3 +11,18 @@ coverage
 vendor/store/
 !vendor/**/dist/
 !vendor/**/dist/**
+
+# Local installation, smoke-test and audit artifacts
+dist-*/
+audit-runtime-userdata-*/
+audit-p0-userdata-*/
+audit-p1-userdata-*/
+audit-installed-userdata-*/
+audit-p0-install-*/
+audit-build-tools-*/
+audit-cdp-*.js
+audit-cdp-*.cjs
+audit-cdp-*.json
+audit-*.png
+audit-*.json
+audit-*.txt

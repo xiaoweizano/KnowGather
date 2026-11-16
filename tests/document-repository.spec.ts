@@ -17,6 +17,7 @@ function payload(revision: number, title = '正文'): DocumentSavePayload {
   return {
     id: 'doc-atomic',
     title,
+    categoryId: null,
     tags: ['测试'],
     content: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: title }] }] },
     revision,
@@ -39,7 +40,7 @@ describe('AtomicDocumentRepository', () => {
     expect(reloaded?.content.content[0]?.content?.[0]?.text).toBe('正文')
 
     const raw = await readFile(path.join(directory, 'shizhi-documents.json'), 'utf8')
-    expect(JSON.parse(raw).schemaVersion).toBe(1)
+    expect(JSON.parse(raw).schemaVersion).toBe(2)
   })
 
   it('does not move the saved revision backwards when stale writes finish late', async () => {

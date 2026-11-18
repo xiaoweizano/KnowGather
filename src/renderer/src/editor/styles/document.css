@@ -421,11 +421,16 @@
 
 /* ------------------------------------------------------------------ folding */
 
+/* The fold toggle is a widget at the start of every heading. Keeping it in the
+   inline flow — even at opacity 0 — pushed the heading text right by its width,
+   so it is taken out of flow and parked in the heading's own gutter. */
 .shizhi-editor .fold-button {
-  display: inline-grid;
+  position: absolute;
+  top: 0;
+  left: -1.25em;
+  display: grid;
   width: 1.05em;
   height: 1.05em;
-  margin-right: 0.28em;
   padding: 0;
   place-items: center;
   border: 0;
@@ -437,7 +442,6 @@
   line-height: 1;
   opacity: 0;
   transition: opacity 120ms ease, background 120ms ease, color 120ms ease;
-  vertical-align: middle;
 }
 
 .shizhi-editor h1:hover > .fold-button,

@@ -823,9 +823,15 @@ function platformLabel(): string {
   scrollbar-width: thin;
 }
 
+/* One readable column, centred. Letting the card stretch to the full content
+   width pushed each row's control ~700px away from its label. */
+.settings-content > .settings-group {
+  max-width: 880px;
+  margin: 0 auto;
+}
+
 .settings-group {
   display: flex;
-  max-width: 880px;
   flex-direction: column;
   gap: 0;
   padding: 4px 18px 14px;

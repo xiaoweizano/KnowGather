@@ -34,8 +34,8 @@
   --editor-font: "Aptos", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI", sans-serif;
   --editor-code-font: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
   --editor-font-size: 16px;
-  --editor-line-height: 1.72;
-  --editor-paragraph-spacing: 0.42em;
+  --editor-line-height: 1.56;
+  --editor-paragraph-spacing: 0.24em;
 
   /* Shell surfaces and text that must not be hard-coded per component. */
   --surface-input: #f4f2f8;

@@ -3,7 +3,7 @@
   caret-color: #6555dc;
   font-family: var(--editor-font, "Aptos", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI", sans-serif);
   font-size: var(--editor-font-size, 16px);
-  line-height: var(--editor-line-height, 1.72);
+  line-height: var(--editor-line-height, 1.56);
   letter-spacing: 0.012em;
   overflow-wrap: anywhere;
   word-break: break-word;
@@ -16,8 +16,11 @@
   box-sizing: border-box;
 }
 
-.shizhi-editor:focus,
-.shizhi-editor:focus-visible {
+/* The editor body carries tabindex="0", so the generic `[tabindex]:focus-visible`
+   rule in base.css would draw a focus ring around the writing surface. Matching
+   on the contenteditable attribute outranks it regardless of stylesheet order. */
+.shizhi-editor[contenteditable="true"]:focus,
+.shizhi-editor[contenteditable="true"]:focus-visible {
   outline: none;
 }
 
@@ -26,9 +29,9 @@
 }
 
 .shizhi-editor p {
-  margin: 0 0 var(--editor-paragraph-spacing, 0.42em);
+  margin: 0 0 var(--editor-paragraph-spacing, 0.24em);
   padding: 0;
-  line-height: var(--editor-line-height, 1.72);
+  line-height: var(--editor-line-height, 1.56);
   font-size: 1em;
 }
 
@@ -85,7 +88,7 @@
 .shizhi-editor li {
   margin: 0.18em 0;
   padding-left: 0.18em;
-  line-height: var(--editor-line-height, 1.72);
+  line-height: var(--editor-line-height, 1.56);
 }
 
 .shizhi-editor li > p {

@@ -80,4 +80,11 @@ describe('knowledge view data', () => {
     expect(formatKnowledgeUpdatedAt(new Date(2026, 10, 1, 8, 5).toISOString(), now)).toBe('11月01日')
     expect(formatKnowledgeUpdatedAt('invalid', now)).toBe('时间未知')
   })
+
+  it('formats dates in English when that locale is requested', () => {
+    const now = new Date(2026, 10, 13, 10, 0)
+    expect(formatKnowledgeUpdatedAt(new Date(2026, 10, 13, 9, 5).toISOString(), now, 'en-US')).toMatch(/^Today /)
+    expect(formatKnowledgeUpdatedAt(new Date(2026, 10, 12, 18, 5).toISOString(), now, 'en-US')).toMatch(/^Yesterday /)
+    expect(formatKnowledgeUpdatedAt(new Date(2026, 10, 1, 8, 5).toISOString(), now, 'en-US')).toBe('11/01')
+  })
 })

@@ -3,18 +3,20 @@ import { computed } from 'vue'
 import AppIcon from './AppIcon.vue'
 import { useDocumentStore } from '../stores/document'
 import { useUiStore } from '../stores/ui'
+import { useI18n } from '../i18n/useI18n'
 
 const documentStore = useDocumentStore()
 const ui = useUiStore()
+const { t } = useI18n()
 const words = computed(() => documentStore.wordCount)
 const readingMinutes = computed(() => Math.max(1, Math.ceil(words.value / 360)))
 
 const saveLabel = computed(() => {
   const phase = documentStore.saveState.phase
-  if (phase === 'saving') return '正在保存…'
-  if (phase === 'dirty') return '等待保存'
-  if (phase === 'error') return '保存失败'
-  return '已保存'
+  if (phase === 'saving') return t('common.saving')
+  if (phase === 'dirty') return t('common.pending')
+  if (phase === 'error') return t('common.saveFailed')
+  return t('common.saved')
 })
 
 const saveTone = computed(() => {
@@ -27,9 +29,9 @@ const saveTone = computed(() => {
 <template>
   <footer class="status-bar">
     <div class="status-left">
-      <span>字数：<strong>{{ words }}</strong></span>
+      <span>{{ t('status.words', { count: words }) }}</span>
       <span class="status-divider" />
-      <span>阅读时长：约 {{ readingMinutes }} 分钟</span>
+      <span>{{ t('status.readingTime', { minutes: readingMinutes }) }}</span>
       <span class="save-status" :class="saveTone">
         <span class="status-pulse" />
         {{ saveLabel }}
@@ -40,8 +42,18 @@ const saveTone = computed(() => {
       <button
         type="button"
         class="status-icon"
+        :class="{ active: ui.outlineVisible }"
+        :title="ui.outlineVisible ? t('editor.outline.hide') : t('editor.outline.show')"
+        :aria-pressed="ui.outlineVisible"
+        @click="ui.toggleOutline()"
+      >
+        <AppIcon name="list" :size="16" />
+      </button>
+      <button
+        type="button"
+        class="status-icon"
         :class="{ active: ui.contentWidth === 'wide' }"
-        :title="ui.contentWidth === 'wide' ? '切换舒适宽度' : '切换宽屏宽度'"
+        :title="ui.contentWidth === 'wide' ? t('status.widthComfortable') : t('status.widthWide')"
         :aria-pressed="ui.contentWidth === 'wide'"
         @click="ui.toggleContentWidth()"
       >
@@ -51,28 +63,28 @@ const saveTone = computed(() => {
         type="button"
         class="status-icon"
         :class="{ active: ui.companionVisible }"
-        :title="ui.companionVisible ? '隐藏萌宠' : '显示萌宠'"
+        :title="ui.companionVisible ? t('status.hideCompanion') : t('status.showCompanion')"
         :aria-pressed="ui.companionVisible"
         @click="ui.toggleCompanion()"
       >
         <AppIcon name="sparkles" :size="16" />
       </button>
       <div class="zoom-control">
-        <button type="button" title="缩小" @click="ui.adjustZoom(-10)"><AppIcon name="zoomOut" :size="16" /></button>
-        <button type="button" class="zoom-value" title="恢复 100% 缩放" @click="ui.resetZoom">{{ ui.zoom }}%</button>
-        <button type="button" title="放大" @click="ui.adjustZoom(10)"><AppIcon name="zoomIn" :size="16" /></button>
+        <button type="button" :title="t('status.zoomOut')" @click="ui.adjustZoom(-10)"><AppIcon name="zoomOut" :size="16" /></button>
+        <button type="button" class="zoom-value" :title="t('status.zoomReset')" @click="ui.resetZoom">{{ ui.zoom }}%</button>
+        <button type="button" :title="t('status.zoomIn')" @click="ui.adjustZoom(10)"><AppIcon name="zoomIn" :size="16" /></button>
       </div>
       <button
         type="button"
         class="status-icon"
         :class="{ active: ui.focusMode }"
-        title="切换专注模式"
+        :title="t('status.focusMode')"
         :aria-pressed="ui.focusMode"
         @click="ui.toggleFocusMode()"
       >
         <AppIcon name="focus" :size="17" />
       </button>
-      <button type="button" class="status-icon" :title="ui.sidebarVisible ? '隐藏侧栏' : '显示侧栏'" @click="ui.sidebarVisible = !ui.sidebarVisible"><AppIcon name="panel" :size="17" /></button>
+      <button type="button" class="status-icon" :title="ui.sidebarVisible ? t('status.hideSidebar') : t('status.showSidebar')" @click="ui.sidebarVisible = !ui.sidebarVisible"><AppIcon name="panel" :size="17" /></button>
     </div>
   </footer>
 </template>
@@ -80,14 +92,14 @@ const saveTone = computed(() => {
 <style scoped>
 .status-bar {
   display: flex;
-  height: 42px;
+  height: 38px;
   flex: 0 0 auto;
   align-items: center;
   justify-content: space-between;
   padding: 0 19px 0 24px;
-  border-top: 1px solid #ebe8f1;
+  border-top: 1px solid var(--divider-soft);
   background: var(--panel-strong);
-  color: #85808f;
+  color: var(--text-secondary);
   font-size: 10.5px;
 }
 
@@ -95,11 +107,11 @@ const saveTone = computed(() => {
 .status-right {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
 }
 
 .status-left strong {
-  color: #5c5767;
+  color: var(--text-row);
   font-weight: 650;
   font-variant-numeric: tabular-nums;
 }
@@ -107,7 +119,7 @@ const saveTone = computed(() => {
 .status-divider {
   width: 1px;
   height: 14px;
-  background: #e6e2ec;
+  background: var(--border-soft);
 }
 
 .save-status {
@@ -115,18 +127,18 @@ const saveTone = computed(() => {
   align-items: center;
   gap: 5px;
   margin-left: 6px;
-  color: #8e8998;
+  color: var(--text-secondary);
 }
 
 .status-pulse {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #68b08f;
+  background: var(--state-success-fg);
 }
 
 .save-status.pending .status-pulse {
-  background: #d3a345;
+  background: var(--state-warning-fg);
   animation: save-pulse 1.4s ease-in-out infinite;
 }
 
@@ -140,46 +152,51 @@ const saveTone = computed(() => {
 
 .zoom-control {
   display: flex;
-  height: 27px;
+  height: 26px;
   align-items: center;
-  border: 1px solid #e6e3ec;
+  border: 1px solid var(--border-soft);
   border-radius: 7px;
   background: var(--panel-bg);
 }
 
 .zoom-control button {
   display: grid;
-  height: 25px;
+  height: 24px;
   place-items: center;
   border: 0;
   background: transparent;
-  color: #736e7d;
+  color: var(--text-secondary);
   cursor: pointer;
 }
 
 .zoom-control button:first-child,
 .zoom-control button:last-child {
-  width: 29px;
+  width: 28px;
 }
 
 .zoom-value {
-  min-width: 49px;
-  border-right: 1px solid #ebe8f1 !important;
-  border-left: 1px solid #ebe8f1 !important;
+  min-width: 48px;
+  border-right: 1px solid var(--divider-soft) !important;
+  border-left: 1px solid var(--divider-soft) !important;
   font-size: 10px;
   font-variant-numeric: tabular-nums;
 }
 
 .status-icon {
   display: grid;
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
   place-items: center;
-  border: 1px solid #e6e3ec;
+  border: 1px solid transparent;
   border-radius: 7px;
-  background: var(--panel-strong);
-  color: #716c7c;
+  background: transparent;
+  color: var(--text-secondary);
   cursor: pointer;
+  transition: background var(--motion-fast) var(--ease-out), color var(--motion-fast) var(--ease-out);
+}
+
+.status-icon:hover {
+  background: var(--panel-muted);
 }
 
 .status-icon.active {

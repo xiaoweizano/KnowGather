@@ -85,6 +85,7 @@ export class AtomicDocumentRepository {
         title: validated.title.trim() || '无标题文档',
         categoryId: validated.categoryId,
         tags: [...validated.tags],
+        favorite: validated.favorite,
         content: validated.content,
         revision: validated.revision,
         version: Math.max(validated.version, (current?.version ?? 0) + 1),
@@ -324,12 +325,16 @@ function validateV2Database(value: Record<string, unknown>): KnowledgeDatabaseV2
 function validatePersistedDocument(value: unknown, legacy: boolean): DocumentRecord {
   if (!isRecord(value)) throw new Error('Invalid document record')
   const categoryId = legacy ? (value.categoryId ?? null) : value.categoryId
+  // Older v1 databases and documents saved before the favorite field existed
+  // simply carry no value; treat a missing flag as "not favorited".
+  const favorite = value.favorite ?? false
   try {
     const payload = validateDocumentSavePayload({
       id: value.id,
       title: value.title,
       categoryId,
       tags: value.tags,
+      favorite,
       content: value.content,
       revision: value.revision,
       version: value.version,

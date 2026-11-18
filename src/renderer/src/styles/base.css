@@ -1,5 +1,6 @@
 :root {
-  font-family: "Aptos", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI", sans-serif;
+  font-family: var(--ui-font, "Aptos", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI", sans-serif);
+  font-size: var(--ui-font-size, 13px);
   color: #29263a;
   background: #f2f1f8;
   font-synthesis: none;
@@ -26,6 +27,116 @@
   --toolbar-height: 50px;
   --header-height: 145px;
   --shell-radius: 14px;
+
+  /* Editor typography is driven from the ui store so settings apply live. */
+  --ui-font: "Aptos", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI", sans-serif;
+  --ui-font-size: 13px;
+  --editor-font: "Aptos", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI", sans-serif;
+  --editor-code-font: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+  --editor-font-size: 16px;
+  --editor-line-height: 1.72;
+  --editor-paragraph-spacing: 0.42em;
+
+  /* Shell surfaces and text that must not be hard-coded per component. */
+  --surface-input: #f4f2f8;
+  --surface-chip: #f3f1f8;
+  --surface-hover: #f3f1f8;
+  --surface-row-active: linear-gradient(90deg, #f4f1ff, #f7f5ff);
+  --border-row-active: #ece8fb;
+  --divider-soft: #efedf4;
+  --text-strong-muted: #464154;
+  --text-row: #625d6e;
+  --text-meta: #9893a4;
+  --text-placeholder: #9a96a7;
+  --text-hint: #a6a1b2;
+  --accent-soft-border: #dcd4fb;
+  --accent-soft-bg: #f0ecff;
+  --state-success-bg: #e9f7f0;
+  --state-success-fg: #4ca580;
+  --state-warning-bg: #fff6e4;
+  --state-warning-fg: #b78620;
+  --state-danger-bg: #fff7f8;
+  --state-danger-border: #efd5d8;
+  --state-danger-fg: #a14956;
+  --scrollbar-thumb: #ddd8eb;
+
+  /* Heatmap scale: derived from the accent at four intensities. */
+  --heat-0: #f1eff6;
+  --heat-1: #ddd6ff;
+  --heat-2: #b9adfb;
+  --heat-3: #8b78ee;
+  --heat-4: #6552d6;
+}
+
+/* ---------------------------------------------------------------- accents */
+:root[data-accent="violet"] {
+  --accent: #7969e8;
+  --accent-strong: #6555dc;
+  --accent-soft: #efedff;
+  --accent-faint: #f6f4ff;
+  --accent-soft-border: #dcd4fb;
+  --accent-soft-bg: #f0ecff;
+  --selection: #ded9ff;
+  --heat-1: #ddd6ff;
+  --heat-2: #b9adfb;
+  --heat-3: #8b78ee;
+  --heat-4: #6552d6;
+}
+
+:root[data-accent="mint"] {
+  --accent: #2fa581;
+  --accent-strong: #25896b;
+  --accent-soft: #e6f7f1;
+  --accent-faint: #f1fbf7;
+  --accent-soft-border: #c9ece0;
+  --accent-soft-bg: #ecf9f4;
+  --selection: #cdeee2;
+  --heat-1: #cdf0e3;
+  --heat-2: #95dcc2;
+  --heat-3: #4dbb95;
+  --heat-4: #2b8f70;
+}
+
+:root[data-accent="cream"] {
+  --accent: #d19a3c;
+  --accent-strong: #b3802c;
+  --accent-soft: #fdf3df;
+  --accent-faint: #fefaef;
+  --accent-soft-border: #f0dfbd;
+  --accent-soft-bg: #fdf5e4;
+  --selection: #f7e6c2;
+  --heat-1: #faeccd;
+  --heat-2: #f0d49b;
+  --heat-3: #dbb35f;
+  --heat-4: #b98c2f;
+}
+
+:root[data-accent="sakura"] {
+  --accent: #e07098;
+  --accent-strong: #c9517a;
+  --accent-soft: #fdeef3;
+  --accent-faint: #fff7fa;
+  --accent-soft-border: #f5d3df;
+  --accent-soft-bg: #fdf1f5;
+  --selection: #f9d8e4;
+  --heat-1: #fbe0e9;
+  --heat-2: #f5b8ca;
+  --heat-3: #e780a4;
+  --heat-4: #c85b80;
+}
+
+:root[data-accent="ocean"] {
+  --accent: #3b86c9;
+  --accent-strong: #2c6fae;
+  --accent-soft: #e8f2fb;
+  --accent-faint: #f3f9fe;
+  --accent-soft-border: #cadff1;
+  --accent-soft-bg: #eef6fc;
+  --selection: #d3e7f8;
+  --heat-1: #d8ebf9;
+  --heat-2: #a5ccef;
+  --heat-3: #5f9fdc;
+  --heat-4: #3379b7;
 }
 
 :root[data-theme="dark"] {
@@ -48,6 +159,90 @@
   --success: #72c6a3;
   --shadow-soft: 0 12px 34px rgba(0, 0, 0, 0.22);
   --shadow-float: 0 18px 48px rgba(0, 0, 0, 0.38), 0 2px 8px rgba(0, 0, 0, 0.2);
+
+  --surface-input: #2a2537;
+  --surface-chip: #2a2537;
+  --surface-hover: #2a2537;
+  --surface-row-active: linear-gradient(90deg, #2f2a48, #2a253c);
+  --border-row-active: #3b3457;
+  --divider-soft: #302b3d;
+  --text-strong-muted: #ded9ea;
+  --text-row: #b6b0c6;
+  --text-meta: #8b8599;
+  --text-placeholder: #857f95;
+  --text-hint: #7b758b;
+  --accent-soft-border: #4a4170;
+  --accent-soft-bg: #332d54;
+  --state-success-bg: #233a32;
+  --state-success-fg: #72c6a3;
+  --state-warning-bg: #3a3021;
+  --state-warning-fg: #e0b45c;
+  --state-danger-bg: #3a2229;
+  --state-danger-border: #55303a;
+  --state-danger-fg: #f08393;
+  --scrollbar-thumb: #413a51;
+
+  --heat-0: #262233;
+  --heat-1: #3b3463;
+  --heat-2: #574a9a;
+  --heat-3: #7f6cd6;
+  --heat-4: #a795ff;
+}
+
+:root[data-theme="dark"][data-accent="mint"] {
+  --accent: #5cc9a5;
+  --accent-strong: #82dbbc;
+  --accent-soft: #23433a;
+  --accent-faint: #1f3a33;
+  --accent-soft-border: #2f5a4c;
+  --accent-soft-bg: #234338;
+  --selection: #2f5f50;
+  --heat-1: #244639;
+  --heat-2: #2f6b55;
+  --heat-3: #4a9c7d;
+  --heat-4: #6fd3ae;
+}
+
+:root[data-theme="dark"][data-accent="cream"] {
+  --accent: #e0b45c;
+  --accent-strong: #f0c97a;
+  --accent-soft: #3a3021;
+  --accent-faint: #332b1e;
+  --accent-soft-border: #574529;
+  --accent-soft-bg: #3a3021;
+  --selection: #5a4826;
+  --heat-1: #3a3021;
+  --heat-2: #5f4a26;
+  --heat-3: #9c7734;
+  --heat-4: #e0b45c;
+}
+
+:root[data-theme="dark"][data-accent="sakura"] {
+  --accent: #f08fae;
+  --accent-strong: #f7adc6;
+  --accent-soft: #43263a;
+  --accent-faint: #3a2132;
+  --accent-soft-border: #5f3450;
+  --accent-soft-bg: #432636;
+  --selection: #5f3a50;
+  --heat-1: #3f2434;
+  --heat-2: #6b3550;
+  --heat-3: #a8577c;
+  --heat-4: #ee90b0;
+}
+
+:root[data-theme="dark"][data-accent="ocean"] {
+  --accent: #6aaee6;
+  --accent-strong: #92c6f2;
+  --accent-soft: #1f3345;
+  --accent-faint: #1c2c3c;
+  --accent-soft-border: #2f4d68;
+  --accent-soft-bg: #213648;
+  --selection: #2f5273;
+  --heat-1: #1f3345;
+  --heat-2: #2c5578;
+  --heat-3: #4b84b5;
+  --heat-4: #79bdf0;
 }
 
 * {
@@ -70,7 +265,8 @@ body {
 
 button,
 input,
-textarea {
+textarea,
+select {
   font: inherit;
 }
 
@@ -90,6 +286,40 @@ textarea:focus-visible,
   outline-offset: 2px;
 }
 
+/* ---------------------------------------------------------------- motion */
+:root {
+  --motion-fast: 120ms;
+  --motion-base: 180ms;
+  --motion-slow: 260ms;
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Motion preferences set from Settings → Appearance; "off" also disables the
+   system-level reduce-motion query below, which is why it comes first. */
+:root[data-motion="reduced"] {
+  --motion-fast: 80ms;
+  --motion-base: 110ms;
+  --motion-slow: 150ms;
+}
+
+:root[data-motion="reduced"] *,
+:root[data-motion="reduced"] *::before,
+:root[data-motion="reduced"] *::after {
+  animation-duration: 0.18s !important;
+  animation-iteration-count: 1 !important;
+  scroll-behavior: auto !important;
+}
+
+:root[data-motion="off"] *,
+:root[data-motion="off"] *::before,
+:root[data-motion="off"] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  scroll-behavior: auto !important;
+  transition-duration: 0.01ms !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -98,5 +328,49 @@ textarea:focus-visible,
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+/* Page and overlay transitions shared by every screen. */
+.page-enter-active,
+.page-leave-active {
+  transition: opacity var(--motion-base) var(--ease-out), transform var(--motion-base) var(--ease-out);
+}
+
+.page-enter-from {
+  opacity: 0;
+  transform: translateY(6px);
+}
+
+.page-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+
+.pop-enter-active,
+.pop-leave-active {
+  transform-origin: top left;
+  transition: opacity var(--motion-fast) var(--ease-out), transform var(--motion-fast) var(--ease-out);
+}
+
+.pop-enter-from,
+.pop-leave-to {
+  opacity: 0;
+  transform: scale(0.96) translateY(-3px);
+}
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity var(--motion-base) var(--ease-out);
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+@media (max-width: 720px) {
+  :root {
+    --ui-font-size: 13px;
   }
 }

@@ -3,9 +3,11 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { Editor } from '@tiptap/core'
 import { computePosition, flip, offset, shift } from '@floating-ui/dom'
 import AppIcon from '../../components/AppIcon.vue'
+import { useI18n } from '../../i18n/useI18n'
 import { normalizeImageAlign, normalizeImageWidth } from '../extensions/image'
 
 const props = defineProps<{ editor: Editor }>()
+const { t } = useI18n()
 const controls = ref<HTMLElement | null>(null)
 const revision = ref(0)
 let boundEditor: Editor | null = null
@@ -103,22 +105,22 @@ function removeImage(): void {
 </script>
 
 <template>
-  <div v-if="visible" ref="controls" class="image-controls" role="toolbar" aria-label="图片设置">
+  <div v-if="visible" ref="controls" class="image-controls" role="toolbar" :aria-label="t('editor.image.aria')">
     <div class="align-group">
-      <button v-for="option in ['left', 'center', 'right']" :key="option" type="button" :class="{ active: align === option }" :title="option === 'left' ? '左对齐' : option === 'center' ? '居中' : '右对齐'" @mousedown.prevent @click="setAlign(option)">
+      <button v-for="option in ['left', 'center', 'right']" :key="option" type="button" :class="{ active: align === option }" :title="option === 'left' ? t('editor.image.alignLeft') : option === 'center' ? t('editor.image.alignCenter') : t('editor.image.alignRight')" @mousedown.prevent @click="setAlign(option)">
         <AppIcon :name="option === 'left' ? 'alignLeft' : option === 'center' ? 'alignCenter' : 'alignRight'" :size="15" />
       </button>
     </div>
     <span class="control-divider" />
-    <select :value="width" title="图片宽度" @change="setWidth(($event.target as HTMLSelectElement).value)">
+    <select :value="width" :title="t('editor.image.width')" @change="setWidth(($event.target as HTMLSelectElement).value)">
       <option value="25">25%</option>
       <option value="50">50%</option>
       <option value="75">75%</option>
       <option value="100">100%</option>
     </select>
     <span class="control-divider" />
-    <input v-model="altText" type="text" aria-label="图片替代文本" placeholder="替代文本" @keydown.enter.prevent="commitAlt" @blur="commitAlt" />
-    <button type="button" class="danger" title="删除图片" aria-label="删除图片" @mousedown.prevent @click="removeImage">
+    <input v-model="altText" type="text" :aria-label="t('editor.image.alt')" :placeholder="t('editor.image.altPlaceholder')" @keydown.enter.prevent="commitAlt" @blur="commitAlt" />
+    <button type="button" class="danger" :title="t('editor.image.delete')" :aria-label="t('editor.image.delete')" @mousedown.prevent @click="removeImage">
       <AppIcon name="trash" :size="15" />
     </button>
   </div>

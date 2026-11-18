@@ -3,23 +3,48 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import NavigationRail from '../components/NavigationRail.vue'
 import ResourceSidebar from '../components/ResourceSidebar.vue'
 import EditorWorkspace from '../components/EditorWorkspace.vue'
+import JournalPage from '../components/JournalPage.vue'
+import HomePage from '../components/HomePage.vue'
+import SettingsPage from '../components/SettingsPage.vue'
+import ColumnResizer from '../components/ColumnResizer.vue'
+import ImportDialog from '../components/ImportDialog.vue'
 import AppIcon from '../components/AppIcon.vue'
 import { useDocumentStore } from '../stores/document'
 import { useUiStore } from '../stores/ui'
+import { useSettingsStore } from '../stores/settings'
 import { getShizhiApi } from '../services/api'
 import { resolveDocumentViewState } from './documentPageState'
 import { resolveNavigationTarget, type NavigationKey } from './knowledgeNavigation'
-import { formatKnowledgeUpdatedAt } from './knowledgeView'
+import type { ImportOutcome } from '../stores/document'
+import { useI18n } from '../i18n/useI18n'
+import {
+  bindingFromEvent,
+  normalizeBinding,
+  readShortcuts,
+  type ShortcutMap,
+} from './shortcuts'
+import {
+  clampNavigationWidth,
+  clampSidebarWidth,
+  DEFAULT_NAVIGATION_WIDTH,
+  DEFAULT_SIDEBAR_WIDTH,
+  MAX_NAVIGATION_WIDTH,
+  MAX_SIDEBAR_WIDTH,
+  MIN_NAVIGATION_WIDTH,
+  MIN_SIDEBAR_WIDTH,
+} from '../stores/ui'
 
 const documentStore = useDocumentStore()
 const ui = useUiStore()
+const { t } = useI18n()
 const api = getShizhiApi()
 const initializing = ref(false)
 const creating = ref(false)
 const activeNavigation = ref<NavigationKey>('library')
-const creatingJournal = ref(false)
-const deletingJournalId = ref<string | null>(null)
-const journalActionError = ref<string | null>(null)
+const importOpen = ref(false)
+const importing = ref(false)
+const importDefaultCategory = ref<string | null>(null)
+const importDialog = ref<{ showResult: (outcome: ImportOutcome) => void } | null>(null)
 let disposeCloseRequest: (() => void) | null = null
 
 const viewState = computed(() => resolveDocumentViewState({
@@ -28,17 +53,132 @@ const viewState = computed(() => resolveDocumentViewState({
   current: documentStore.current,
 }))
 
-const loadError = computed(() => documentStore.error ?? '无法读取知识库')
+const pageToast = ref('')
+const loadError = computed(() => documentStore.error ?? t('library.loadErrorTitle'))
 const activePage = computed(() => resolveNavigationTarget(activeNavigation.value))
-const journalError = computed(() => journalActionError.value ?? documentStore.error)
+
+function showPageToast(message: string): void {
+  pageToast.value = message
+  if (toastTimer) clearTimeout(toastTimer)
+  toastTimer = setTimeout(() => { pageToast.value = '' }, 2200)
+}
+
+let toastTimer: ReturnType<typeof setTimeout> | null = null
 
 function handleNavigation(key: NavigationKey): void {
+  // Leaving the journal editor commits any pending journal changes first.
+  if (activeNavigation.value === 'journal' && key !== 'journal') documentStore.closeJournal()
   activeNavigation.value = key
-  journalActionError.value = null
+}
+
+/* ------------------------------------------------------------- shortcuts */
+
+const settingsStore = useSettingsStore()
+let shortcuts: ShortcutMap = readShortcuts()
+let disposeNavigate: (() => void) | null = null
+
+/**
+ * Runs the user's application-level shortcut. Only fires when no dialog owns
+ * the keystroke and the editor does not, so typing `Ctrl+N` inside a document
+ * still reaches the browser's own handling rather than creating a document.
+ */
+function handleAppShortcut(event: KeyboardEvent): void {
+  if (event.isComposing || event.defaultPrevented) return
+  const target = event.target as Element | null
+  if (target?.closest('input, textarea, select, [contenteditable="true"], .shizhi-editor')) return
+  const binding = normalizeBinding(bindingFromEvent(event))
+  if (!binding) return
+  const command = (Object.entries(shortcuts) as Array<[string, string]>)
+    .find(([, value]) => normalizeBinding(value) === binding)?.[0]
+  if (!command) return
+
+  switch (command) {
+    case 'new-document':
+      event.preventDefault()
+      void documentStore.createDocument().then((created) => {
+        if (created) activeNavigation.value = 'library'
+      })
+      break
+    case 'search':
+      event.preventDefault()
+      activeNavigation.value = 'library'
+      focusLibrarySearch()
+      break
+    case 'focus-mode':
+      event.preventDefault()
+      ui.toggleFocusMode()
+      break
+    case 'toggle-theme':
+      event.preventDefault()
+      ui.toggleTheme()
+      break
+    case 'open-settings':
+      event.preventDefault()
+      activeNavigation.value = 'settings'
+      break
+    case 'save-now':
+      event.preventDefault()
+      void documentStore.saveNow()
+      void documentStore.saveJournalNow()
+      showPageToast(t('common.saved'))
+      break
+    default:
+      break
+  }
+}
+
+function focusLibrarySearch(): void {
+  // The sidebar may not be rendered yet on this tick; retry after it mounts.
+  const attempt = (tries: number): void => {
+    const input = document.querySelector<HTMLInputElement>('.search-box input')
+    if (input) {
+      input.focus()
+      input.select()
+      return
+    }
+    if (tries > 0) window.setTimeout(() => attempt(tries - 1), 30)
+  }
+  window.setTimeout(() => attempt(5), 0)
+}
+
+async function handleHomeCreateDocument(): Promise<void> {
+  const created = await documentStore.createDocument()
+  if (created) activeNavigation.value = 'library'
+}
+
+async function handleHomeOpenDocument(id: string): Promise<void> {
+  activeNavigation.value = 'library'
+  await documentStore.selectDocument(id)
+}
+
+async function handleHomeOpenJournal(id: string): Promise<void> {
+  activeNavigation.value = 'journal'
+  await documentStore.selectJournal(id)
+}
+
+function openImportDialog(categoryId: string | null = null): void {
+  importDefaultCategory.value = categoryId
+  importOpen.value = true
+}
+
+async function runImport(options: { mode: 'files' | 'folder' | 'archive'; categoryId: string | null; merge: boolean }): Promise<void> {
+  if (importing.value) return
+  importing.value = true
+  try {
+    // Merging writes into whichever document is open, so land on its editor first.
+    if (options.merge) activeNavigation.value = 'library'
+    const outcome = await documentStore.importDocuments(options)
+    if (outcome.canceled) return
+    if (!options.merge && outcome.created > 0) activeNavigation.value = 'library'
+    importDialog.value?.showResult(outcome)
+  } finally {
+    importing.value = false
+  }
 }
 
 function handleBeforeUnload(event: BeforeUnloadEvent): void {
-  if (!documentStore.isDirty) return
+  if (!documentStore.isDirty && documentStore.journalSaveState.phase === 'idle') return
+  if (!documentStore.isDirty && documentStore.journalSaveState.phase === 'saved') return
   event.preventDefault()
   event.returnValue = ''
 }
@@ -55,30 +195,6 @@ async function loadKnowledgeBase(): Promise<void> {
   }
 }
 
-async function createJournal(): Promise<void> {
-  if (creatingJournal.value) return
-  creatingJournal.value = true
-  journalActionError.value = null
-  try {
-    const created = await documentStore.createJournal()
-    if (!created) journalActionError.value = documentStore.error ?? '新建日志失败'
-  } finally {
-    creatingJournal.value = false
-  }
-}
-
-async function deleteJournal(id: string): Promise<void> {
-  if (deletingJournalId.value) return
-  deletingJournalId.value = id
-  journalActionError.value = null
-  try {
-    const deleted = await documentStore.deleteJournal(id)
-    if (!deleted) journalActionError.value = documentStore.error ?? '删除日志失败'
-  } finally {
-    deletingJournalId.value = null
-  }
-}
-
 async function createFirstDocument(): Promise<void> {
   if (creating.value) return
   creating.value = true
@@ -91,109 +207,145 @@ async function createFirstDocument(): Promise<void> {
 
 onMounted(async () => {
   window.addEventListener('beforeunload', handleBeforeUnload)
+  window.addEventListener('keydown', handleAppShortcut)
   disposeCloseRequest = api.window.onCloseRequested(() => {
     void documentStore.saveNow()
+    void documentStore.saveJournalNow()
   })
+  disposeNavigate = api.app.onNavigate(() => {
+    activeNavigation.value = 'settings'
+  })
+  // The tray can be shown before the settings page is ever opened, so load the
+  // app-level settings once at startup to apply locale and window behaviour.
+  void settingsStore.load()
   await loadKnowledgeBase()
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('beforeunload', handleBeforeUnload)
+  window.removeEventListener('keydown', handleAppShortcut)
   disposeCloseRequest?.()
   disposeCloseRequest = null
+  disposeNavigate?.()
+  disposeNavigate = null
   void documentStore.saveNow()
+  void documentStore.saveJournalNow()
   documentStore.dispose()
 })
 </script>
 
 <template>
-  <div class="document-shell" :class="ui.shellClasses">
+  <div class="document-shell" :class="ui.shellClasses" :style="ui.shellStyle">
     <NavigationRail
       :active-item="activeNavigation"
       @navigate="handleNavigation"
     />
-    <template v-if="activePage.page === 'library'">
+    <ColumnResizer
+      v-if="!ui.focusMode && !ui.navigationCollapsed"
+      :value="ui.navigationWidth"
+      :min="MIN_NAVIGATION_WIDTH"
+      :max="MAX_NAVIGATION_WIDTH"
+      :label="t('a11y.resizeNavigation')"
+      @resize="ui.setNavigationWidth(clampNavigationWidth($event))"
+      @reset="ui.resetNavigationWidth()"
+    />
+
+    <HomePage
+      v-if="activePage.page === 'home'"
+      class="page-pane"
+      @create-document="handleHomeCreateDocument"
+      @open-document="handleHomeOpenDocument"
+      @open-journal="handleHomeOpenJournal"
+      @import-documents="openImportDialog()"
+      @go-to-library="activeNavigation = 'library'"
+      @go-to-journal="activeNavigation = 'journal'"
+    />
+
+    <SettingsPage v-else-if="activePage.page === 'settings'" class="page-pane" />
+
+    <template v-else-if="activePage.page === 'library'">
       <ResourceSidebar
+        v-if="!documentStore.currentJournal"
         :initializing="initializing"
         :load-error="viewState === 'error' ? loadError : null"
         @retry-load="loadKnowledgeBase"
+        @import-documents="openImportDialog($event ?? null)"
+        @notify="showPageToast"
+      />
+      <ColumnResizer
+        v-if="!documentStore.currentJournal && !ui.focusMode"
+        :value="ui.sidebarWidth"
+        :min="MIN_SIDEBAR_WIDTH"
+        :max="MAX_SIDEBAR_WIDTH"
+        :label="t('a11y.resizeSidebar')"
+        @resize="ui.setSidebarWidth(clampSidebarWidth($event))"
+        @reset="ui.resetSidebarWidth()"
       />
 
       <EditorWorkspace
-        v-if="viewState === 'editor' && documentStore.current"
+        v-if="!documentStore.currentJournal && viewState === 'editor' && documentStore.current"
         :key="documentStore.current.id"
         :document="documentStore.current"
       />
 
-      <div v-else-if="viewState === 'loading'" class="app-loading" aria-live="polite">
-        <span class="loading-mark">拾</span>
-        <span>正在整理你的知识库…</span>
+      <div v-else-if="!documentStore.currentJournal && viewState === 'loading'" class="app-loading" aria-live="polite">
+        <span class="loading-mark">{{ t('document.brandLetter') }}</span>
+        <span>{{ t('library.loading') }}</span>
       </div>
 
-      <section v-else-if="viewState === 'error'" class="app-loading app-error" role="alert">
+      <section v-else-if="!documentStore.currentJournal && viewState === 'error'" class="app-loading app-error" role="alert">
         <AppIcon name="info" :size="25" />
-        <strong>无法读取知识库</strong>
+        <strong>{{ t('library.loadErrorTitle') }}</strong>
         <span>{{ loadError }}</span>
         <button type="button" :disabled="initializing" @click="loadKnowledgeBase">
-          {{ initializing ? '正在读取…' : '重新读取' }}
+          {{ initializing ? t('library.readingNow') : t('library.retryLoad') }}
         </button>
       </section>
 
-      <section v-else class="app-loading app-empty">
-        <span class="loading-mark">拾</span>
-        <strong>从第一篇知识开始</strong>
-        <span>创建的内容会真实保存到本机知识库。</span>
-        <button type="button" :disabled="creating" @click="createFirstDocument">
-          {{ creating ? '正在创建…' : '新建第一篇文档' }}
-        </button>
+      <section v-else-if="!documentStore.currentJournal" class="app-loading app-empty">
+        <span class="loading-mark">{{ t('document.brandLetter') }}</span>
+        <strong>{{ t('home.empty.title') }}</strong>
+        <span>{{ t('home.empty.body') }}</span>
+        <div class="app-empty-actions">
+          <button type="button" :disabled="creating" @click="createFirstDocument">
+            {{ creating ? t('journal.creating') : t('home.newDocument') }}
+          </button>
+          <button type="button" class="app-empty-secondary" @click="openImportDialog()">
+            {{ t('home.importDocuments') }}
+          </button>
+        </div>
       </section>
+
+      <JournalPage v-else />
     </template>
 
-    <section v-else-if="activePage.page === 'journal'" class="journal-page" aria-labelledby="journal-heading">
-      <header class="journal-header">
-        <div>
-          <span class="journal-eyebrow">JOURNAL</span>
-          <h1 id="journal-heading">日志</h1>
-          <p>记录保存在本机，当前版本仅支持查看和删除。</p>
-        </div>
-        <button type="button" :disabled="creatingJournal" @click="createJournal">
-          {{ creatingJournal ? '正在创建…' : '新建日志' }}
-        </button>
-      </header>
+    <JournalPage v-else-if="activePage.page === 'journal'" />
 
-      <p v-if="journalError" class="journal-error" role="alert">{{ journalError }}</p>
-
-      <div v-if="documentStore.journals.length" class="journal-list">
-        <article v-for="journal in documentStore.journals" :key="journal.id" class="journal-card">
-          <div class="journal-card-copy">
-            <strong>{{ journal.title }}</strong>
-            <span>{{ formatKnowledgeUpdatedAt(journal.updatedAt) }}</span>
-            <small>日志编辑尚未接入，当前仅展示</small>
-          </div>
-          <button
-            type="button"
-            class="journal-delete"
-            :disabled="deletingJournalId === journal.id"
-            :aria-label="`删除日志：${journal.title}`"
-            @click="deleteJournal(journal.id)"
-          >
-            {{ deletingJournalId === journal.id ? '正在删除…' : '删除' }}
-          </button>
-        </article>
-      </div>
-
-      <div v-else class="journal-empty">
-        <span class="loading-mark">拾</span>
-        <strong>还没有日志</strong>
-        <span>新建的日志会真实写入本机数据库。</span>
-      </div>
+    <section v-else-if="activePage.page === 'assistant'" class="app-loading app-unimplemented" aria-labelledby="assistant-heading">
+      <AppIcon name="sparkles" :size="25" />
+      <strong id="assistant-heading">{{ t('settings.ai') }}</strong>
+      <span>{{ t('settings.aiHint') }}</span>
     </section>
 
     <section v-else class="app-loading app-unimplemented">
       <AppIcon name="info" :size="25" />
-      <strong>该页面尚未实现</strong>
-      <span>当前安装包暂未提供此页面，不会展示模拟内容。</span>
+      <strong>{{ t('library.pageUnavailable') }}</strong>
+      <span>{{ t('library.pageUnavailableHint') }}</span>
     </section>
+
+    <ImportDialog
+      ref="importDialog"
+      :open="importOpen"
+      :categories="documentStore.categories"
+      :default-category-id="importDefaultCategory"
+      :busy="importing"
+      @close="importOpen = false"
+      @submit="runImport"
+    />
+
+    <Transition name="toast">
+      <div v-if="pageToast" class="page-toast" role="status">{{ pageToast }}</div>
+    </Transition>
   </div>
 </template>
 
@@ -203,7 +355,14 @@ onBeforeUnmount(() => {
   width: 100%;
   height: 100%;
   overflow: hidden;
+  --navigation-width: 116px;
+  --sidebar-width: 302px;
   background: var(--panel-bg);
+}
+
+.page-pane {
+  flex: 1;
+  min-width: 0;
 }
 
 .app-loading {
@@ -259,6 +418,27 @@ onBeforeUnmount(() => {
   opacity: 0.6;
 }
 
+.app-empty-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.app-empty-actions button {
+  margin-top: 0;
+}
+
+.app-empty-secondary {
+  background: var(--panel-strong) !important;
+  border-color: var(--border-strong) !important;
+  color: var(--text-secondary) !important;
+}
+
+.app-empty-secondary:hover {
+  border-color: var(--accent) !important;
+  color: var(--accent-strong) !important;
+}
+
 .app-error .loading-mark {
   animation: none;
 }
@@ -267,139 +447,32 @@ onBeforeUnmount(() => {
   50% { transform: translateY(-3px); }
 }
 
-.journal-page {
-  display: flex;
-  min-width: 0;
-  flex: 1;
-  flex-direction: column;
-  gap: 18px;
-  overflow: auto;
-  padding: 44px clamp(24px, 6vw, 86px);
-  background: linear-gradient(135deg, #fcfbff, #f7f4ff 55%, #fbfafc);
-}
-
-.journal-header {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 24px;
-  padding-bottom: 18px;
-  border-bottom: 1px solid var(--border-soft);
-}
-
-.journal-eyebrow {
-  color: var(--accent);
-  font-size: 9px;
-  font-weight: 750;
-  letter-spacing: 0.2em;
-}
-
-.journal-header h1 {
-  margin: 5px 0 7px;
-  color: var(--text-primary);
-  font-size: 27px;
-}
-
-.journal-header p {
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: 11px;
-}
-
-.journal-header > button {
-  min-height: 36px;
-  padding: 0 15px;
-  border: 1px solid var(--accent);
-  border-radius: 9px;
-  background: var(--accent);
-  color: white;
-  cursor: pointer;
-  font: inherit;
-  font-weight: 650;
-}
-
-.journal-header > button:disabled,
-.journal-delete:disabled {
-  cursor: wait;
-  opacity: 0.6;
-}
-
-.journal-error {
-  margin: 0;
-  padding: 10px 12px;
-  border: 1px solid #efd5d8;
-  border-radius: 9px;
-  background: #fff7f8;
-  color: #a14956;
-  font-size: 11px;
-}
-
-.journal-list {
-  display: grid;
-  gap: 10px;
-  max-width: 900px;
-}
-
-.journal-card {
-  display: flex;
-  align-items: center;
-  gap: 18px;
-  padding: 16px 18px;
-  border: 1px solid var(--border-soft);
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.82);
-}
-
-.journal-card-copy {
-  display: flex;
-  min-width: 0;
-  flex: 1;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.journal-card-copy strong {
-  overflow: hidden;
-  color: var(--text-primary);
-  font-size: 13px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.journal-card-copy span,
-.journal-card-copy small {
-  color: var(--text-tertiary);
-  font-size: 10px;
-}
-
-.journal-delete {
-  padding: 6px 10px;
-  border: 1px solid #efd5d8;
-  border-radius: 7px;
-  background: #fff7f8;
-  color: #a14956;
-  cursor: pointer;
-  font: inherit;
-  font-size: 10px;
-}
-
-.journal-empty {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 9px;
-  color: var(--text-secondary);
-  font-size: 11px;
-}
-
-.journal-empty strong {
-  color: var(--text-primary);
-  font-size: 14px;
-}
-
 .app-unimplemented .loading-mark {
   animation: none;
+}
+
+.page-toast {
+  position: fixed;
+  right: 28px;
+  bottom: 58px;
+  z-index: 260;
+  padding: 9px 14px;
+  border: 1px solid var(--border-soft);
+  border-radius: 9px;
+  background: var(--panel-strong);
+  box-shadow: var(--shadow-float);
+  color: var(--text-primary);
+  font-size: 11px;
+}
+
+.toast-enter-active,
+.toast-leave-active {
+  transition: opacity var(--motion-fast) var(--ease-out), transform var(--motion-fast) var(--ease-out);
+}
+
+.toast-enter-from,
+.toast-leave-to {
+  opacity: 0;
+  transform: translateY(5px);
 }
 </style>

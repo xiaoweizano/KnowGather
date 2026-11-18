@@ -1,13 +1,14 @@
 .shizhi-editor {
   color: #302d3e;
   caret-color: #6555dc;
-  font-family: "Aptos", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI", sans-serif;
-  font-size: 16px;
-  line-height: 1.78;
+  font-family: var(--editor-font, "Aptos", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI", sans-serif);
+  font-size: var(--editor-font-size, 16px);
+  line-height: var(--editor-line-height, 1.72);
   letter-spacing: 0.012em;
   overflow-wrap: anywhere;
   word-break: break-word;
   tab-size: 2;
+  position: relative;
 }
 
 .shizhi-editor,
@@ -25,10 +26,10 @@
 }
 
 .shizhi-editor p {
-  margin: 0 0 0.78em;
+  margin: 0 0 var(--editor-paragraph-spacing, 0.42em);
   padding: 0;
-  line-height: 1.78;
-  font-size: 1rem;
+  line-height: var(--editor-line-height, 1.72);
+  font-size: 1em;
 }
 
 .shizhi-editor p:last-child {
@@ -41,33 +42,34 @@
 .shizhi-editor h4,
 .shizhi-editor h5,
 .shizhi-editor h6 {
+  position: relative;
   color: #242132;
   font-weight: 720;
   line-height: 1.32;
   letter-spacing: -0.025em;
-  margin: 1.55em 0 0.62em;
+  margin: 1.25em 0 0.5em;
   padding: 0;
 }
 
 .shizhi-editor h1 {
-  font-size: 1.72rem;
+  font-size: 1.72em;
 }
 
 .shizhi-editor h2 {
-  font-size: 1.4rem;
+  font-size: 1.4em;
 }
 
 .shizhi-editor h3 {
-  font-size: 1.18rem;
+  font-size: 1.18em;
 }
 
 .shizhi-editor h4 {
-  font-size: 1.05rem;
+  font-size: 1.05em;
 }
 
 .shizhi-editor h5,
 .shizhi-editor h6 {
-  font-size: 1rem;
+  font-size: 1em;
 }
 
 .shizhi-editor > :first-child {
@@ -76,14 +78,14 @@
 
 .shizhi-editor ul,
 .shizhi-editor ol {
-  margin: 0.25em 0 1em;
+  margin: 0.2em 0 0.7em;
   padding-left: 1.62em;
 }
 
 .shizhi-editor li {
-  margin: 0.26em 0;
+  margin: 0.18em 0;
   padding-left: 0.18em;
-  line-height: 1.72;
+  line-height: var(--editor-line-height, 1.72);
 }
 
 .shizhi-editor li > p {
@@ -412,4 +414,118 @@
 
 :root[data-theme="dark"] .shizhi-editor ::selection {
   background: #51498b;
+}
+
+/* ------------------------------------------------------------------ folding */
+
+.shizhi-editor .fold-button {
+  display: inline-grid;
+  width: 1.05em;
+  height: 1.05em;
+  margin-right: 0.28em;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-tertiary, #9a97aa);
+  cursor: pointer;
+  font-size: 0.72em;
+  line-height: 1;
+  opacity: 0;
+  transition: opacity 120ms ease, background 120ms ease, color 120ms ease;
+  vertical-align: middle;
+}
+
+.shizhi-editor h1:hover > .fold-button,
+.shizhi-editor h2:hover > .fold-button,
+.shizhi-editor h3:hover > .fold-button,
+.shizhi-editor .fold-button:focus-visible,
+.shizhi-editor .fold-button.is-collapsed {
+  opacity: 1;
+}
+
+.shizhi-editor .fold-button:hover {
+  background: var(--panel-muted, #f7f6fc);
+  color: var(--text-secondary, #77738a);
+}
+
+/* Collapsed ranges are hidden by decoration only; the JSON is untouched. */
+.shizhi-editor .is-folded {
+  display: none !important;
+}
+
+.shizhi-editor h1.is-folded::after,
+.shizhi-editor h2.is-folded::after,
+.shizhi-editor h3.is-folded::after {
+  margin-left: 0.4em;
+  color: var(--text-tertiary, #9a97aa);
+  content: "⋯";
+  font-weight: 400;
+}
+
+/* -------------------------------------------------------------- line numbers */
+
+.shizhi-editor .block-number {
+  display: inline-block;
+  width: 2.4em;
+  margin-left: -3.2em;
+  padding-right: 0.8em;
+  color: var(--text-hint, #a6a1b2);
+  font-family: var(--editor-code-font, Consolas, monospace);
+  font-size: 0.68em;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.6;
+  opacity: 0.75;
+  pointer-events: none;
+  user-select: none;
+  text-align: right;
+  vertical-align: top;
+}
+
+/* ------------------------------------------------------------ indent guides */
+
+.shizhi-editor.has-indent-guides ul,
+.shizhi-editor.has-indent-guides ol {
+  position: relative;
+}
+
+.shizhi-editor.has-indent-guides li {
+  position: relative;
+}
+
+.shizhi-editor.has-indent-guides ul ul > li::before,
+.shizhi-editor.has-indent-guides ol ol > li::before,
+.shizhi-editor.has-indent-guides ul ol > li::before,
+.shizhi-editor.has-indent-guides ol ul > li::before {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -0.9em;
+  width: 1px;
+  background: var(--divider-soft, #efedf4);
+  content: "";
+}
+
+.shizhi-editor.has-indent-guides li > p {
+  position: relative;
+}
+
+/* ---------------------------------------------------------- hanging indent */
+
+.shizhi-editor.has-hanging-indent > p,
+.shizhi-editor.has-hanging-indent > h1,
+.shizhi-editor.has-hanging-indent > h2,
+.shizhi-editor.has-hanging-indent > h3 {
+  padding-left: 1.6em;
+  text-indent: -1.6em;
+}
+
+.shizhi-editor.has-hanging-indent > blockquote p,
+.shizhi-editor.has-hanging-indent li p,
+.shizhi-editor.has-hanging-indent td p,
+.shizhi-editor.has-hanging-indent th p,
+.shizhi-editor.has-hanging-indent pre {
+  padding-left: 0;
+  text-indent: 0;
 }

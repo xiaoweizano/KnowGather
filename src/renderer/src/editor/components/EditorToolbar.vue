@@ -19,13 +19,17 @@ import {
   type ToolbarActionItem,
 } from '../core/toolbarConfig'
 import { computeToolbarLayout } from '../core/toolbarLayout'
+import { useI18n } from '../../i18n/useI18n'
 
 const props = defineProps<{ editor: Editor | null }>()
+const { t } = useI18n()
 const emit = defineEmits<{
   notify: [message: string]
   requestImage: []
   requestAttachment: []
   insertTable: []
+  foldAll: []
+  unfoldAll: []
 }>()
 
 const toolbarRoot = ref<HTMLElement | null>(null)
@@ -36,11 +40,11 @@ const linkValue = ref('')
 let resizeObserver: ResizeObserver | null = null
 let boundEditor: Editor | null = null
 
-const blockOptions: ReadonlyArray<{ command: EditorCommand; label: string }> = [
-  { command: 'paragraph', label: '正文' },
-  { command: 'heading1', label: '标题 1' },
-  { command: 'heading2', label: '标题 2' },
-  { command: 'heading3', label: '标题 3' },
+const blockOptions: ReadonlyArray<{ command: EditorCommand; labelKey: string }> = [
+  { command: 'paragraph', labelKey: 'editor.block.paragraph' },
+  { command: 'heading1', labelKey: 'editor.block.heading1' },
+  { command: 'heading2', labelKey: 'editor.block.heading2' },
+  { command: 'heading3', labelKey: 'editor.block.heading3' },
 ]
 
 const layout = computed(() => computeToolbarLayout(toolbarWidth.value, PRIMARY_TOOLBAR_ITEMS, {
@@ -56,9 +60,13 @@ const overflowItems = computed(() => {
   return PRIMARY_TOOLBAR_ITEMS.filter((item) => overflow.has(item.key))
 })
 const moreItems = computed(() => [...overflowItems.value, ...MORE_TOOLBAR_ITEMS])
+const foldItems = computed(() => [
+  { key: 'foldAll', label: t('editor.toolbar.foldAll'), icon: 'chevronDown', shortcut: 'Ctrl+Alt+[' },
+  { key: 'unfoldAll', label: t('editor.toolbar.unfoldAll'), icon: 'chevronRight', shortcut: 'Ctrl+Alt+]' },
+])
 const activeBlockLabel = computed(() => {
   revision.value
-  return props.editor ? getActiveBlockLabel(props.editor) : '正文'
+  return props.editor ? getActiveBlockLabel(props.editor) : t('editor.block.paragraph')
 })
 const canUndo = computed(() => {
   revision.value
@@ -113,7 +121,14 @@ function handleDocumentPointerDown(event: PointerEvent): void {
 }
 
 function tooltip(item: ToolbarActionItem): string {
-  return item.shortcut ? `${item.label}  ${item.shortcut}` : item.label
+  const label = t(item.labelKey)
+  return item.shortcut ? `${label}  ${item.shortcut}` : label
+}
+
+function runFold(key: string): void {
+  if (key === 'foldAll') emit('foldAll')
+  else emit('unfoldAll')
+  openPanel.value = ''
 }
 
 function isItemActive(item: ToolbarActionItem): boolean {
@@ -204,25 +219,25 @@ function removeLink(): void {
 </script>
 
 <template>
-  <div ref="toolbarRoot" class="editor-toolbar" role="toolbar" aria-label="文档格式工具栏">
+  <div ref="toolbarRoot" class="editor-toolbar" role="toolbar" :aria-label="t('editor.toolbar.aria')">
     <div class="block-picker">
-      <button class="block-label" type="button" :aria-expanded="openPanel === 'block'" title="段落样式" @mousedown.prevent @click="togglePanel('block')">
+      <button class="block-label" type="button" :aria-expanded="openPanel === 'block'" :title="t('editor.toolbar.paragraphStyle')" @mousedown.prevent @click="togglePanel('block')">
         {{ activeBlockLabel }} <AppIcon name="chevronDown" :size="13" />
       </button>
       <div v-if="openPanel === 'block'" class="toolbar-popover block-menu" role="menu">
-        <button v-for="option in blockOptions" :key="option.command" type="button" role="menuitem" :class="{ active: activeBlockLabel === option.label }" @mousedown.prevent @click="selectBlock(option.command)">
-          <span>{{ option.label }}</span>
-          <AppIcon v-if="activeBlockLabel === option.label" name="check" :size="14" />
+        <button v-for="option in blockOptions" :key="option.command" type="button" role="menuitem" :class="{ active: activeBlockLabel === t(option.labelKey) }" @mousedown.prevent @click="selectBlock(option.command)">
+          <span>{{ t(option.labelKey) }}</span>
+          <AppIcon v-if="activeBlockLabel === t(option.labelKey)" name="check" :size="14" />
         </button>
       </div>
     </div>
 
     <span class="toolbar-divider" />
 
-    <button type="button" class="toolbar-button" title="撤销  Ctrl+Z" :disabled="!canUndo" @mousedown.prevent @click="props.editor && runEditorCommand(props.editor, 'undo')">
+    <button type="button" class="toolbar-button" :title="t('editor.toolbar.undo') + '  Ctrl+Z'" :disabled="!canUndo" @mousedown.prevent @click="props.editor && runEditorCommand(props.editor, 'undo')">
       <AppIcon name="undo" :size="17" />
     </button>
-    <button type="button" class="toolbar-button" title="重做  Ctrl+Shift+Z" :disabled="!canRedo" @mousedown.prevent @click="props.editor && runEditorCommand(props.editor, 'redo')">
+    <button type="button" class="toolbar-button" :title="t('editor.toolbar.redo') + '  Ctrl+Shift+Z'" :disabled="!canRedo" @mousedown.prevent @click="props.editor && runEditorCommand(props.editor, 'redo')">
       <AppIcon name="redo" :size="17" />
     </button>
 
@@ -237,45 +252,51 @@ function removeLink(): void {
     <span class="toolbar-spacer" />
 
     <div class="more-picker">
-      <button type="button" class="toolbar-button" :class="{ active: openPanel === 'more' }" title="更多格式" aria-label="更多格式" :aria-expanded="openPanel === 'more'" @mousedown.prevent @click="togglePanel('more')">
+      <button type="button" class="toolbar-button" data-testid="editor-more" :class="{ active: openPanel === 'more' }" :title="t('editor.toolbar.moreFormat')" :aria-label="t('editor.toolbar.moreFormat')" :aria-expanded="openPanel === 'more'" @mousedown.prevent @click="togglePanel('more')">
         <AppIcon name="more" :size="18" />
       </button>
       <div v-if="openPanel === 'more'" class="toolbar-popover more-menu" role="menu">
         <button v-for="item in moreItems" :key="item.key" type="button" role="menuitem" :class="{ active: isItemActive(item) }" :disabled="isItemDisabled(item)" @mousedown.prevent @click="runItem(item)">
           <AppIcon :name="item.icon" :size="16" />
-          <span>{{ item.label }}</span>
+          <span>{{ t(item.labelKey) }}</span>
           <kbd v-if="item.shortcut">{{ item.shortcut }}</kbd>
+        </button>
+        <div class="more-separator" />
+        <button v-for="item in foldItems" :key="item.key" type="button" role="menuitem" @mousedown.prevent @click="runFold(item.key)">
+          <AppIcon :name="item.icon" :size="16" />
+          <span>{{ item.label }}</span>
+          <kbd>{{ item.shortcut }}</kbd>
         </button>
       </div>
     </div>
 
-    <div v-if="openPanel === 'color'" class="toolbar-popover color-menu" role="menu" aria-label="文字颜色">
-      <span class="popover-title">文字颜色</span>
+    <div v-if="openPanel === 'color'" class="toolbar-popover color-menu" role="menu" :aria-label="t('editor.toolbar.color')">
+      <span class="popover-title">{{ t('editor.toolbar.color') }}</span>
       <div class="swatch-grid">
-        <button v-for="option in TEXT_COLORS" :key="option.label" type="button" class="swatch" :title="option.label" :class="{ 'swatch-default': !option.value }" :style="option.value ? { '--swatch': option.value } : undefined" @mousedown.prevent @click="applyTextColor(option.value)" />
+        <button v-for="option in TEXT_COLORS" :key="option.labelKey" type="button" class="swatch" :title="t(option.labelKey)" :class="{ 'swatch-default': !option.value }" :style="option.value ? { '--swatch': option.value } : undefined" @mousedown.prevent @click="applyTextColor(option.value)" />
       </div>
     </div>
 
-    <div v-if="openPanel === 'highlight'" class="toolbar-popover color-menu" role="menu" aria-label="背景高亮">
-      <span class="popover-title">背景高亮</span>
+    <div v-if="openPanel === 'highlight'" class="toolbar-popover color-menu" role="menu" :aria-label="t('editor.toolbar.highlight')">
+      <span class="popover-title">{{ t('editor.toolbar.highlight') }}</span>
       <div class="swatch-grid">
-        <button v-for="option in HIGHLIGHT_COLORS" :key="option.label" type="button" class="swatch" :title="option.label" :class="{ 'swatch-default': !option.value }" :style="option.value ? { '--swatch': option.value } : undefined" @mousedown.prevent @click="applyHighlight(option.value)" />
+        <button v-for="option in HIGHLIGHT_COLORS" :key="option.labelKey" type="button" class="swatch" :title="t(option.labelKey)" :class="{ 'swatch-default': !option.value }" :style="option.value ? { '--swatch': option.value } : undefined" @mousedown.prevent @click="applyHighlight(option.value)" />
       </div>
     </div>
 
-    <div v-if="openPanel === 'link'" class="toolbar-popover link-popover" role="dialog" aria-label="插入链接">
-      <label for="editor-link-input">链接地址</label>
+    <div v-if="openPanel === 'link'" class="toolbar-popover link-popover" role="dialog" :aria-label="t('editor.link')">
+      <label for="editor-link-input">{{ t('editor.toolbar.linkLabel') }}</label>
       <div class="link-row">
         <input id="editor-link-input" v-model="linkValue" type="url" placeholder="https://example.com" @keydown.enter.prevent="applyLink" @keydown.esc.prevent="openPanel = ''" />
-        <button type="button" class="primary-action" @click="applyLink">应用</button>
+        <button type="button" class="primary-action" @click="applyLink">{{ t('editor.toolbar.linkApply') }}</button>
       </div>
-      <button v-if="props.editor?.isActive('link')" type="button" class="link-remove" @click="removeLink">移除链接</button>
+      <button v-if="props.editor?.isActive('link')" type="button" class="link-remove" @click="removeLink">{{ t('editor.toolbar.linkRemove') }}</button>
     </div>
   </div>
 </template>
 
 <style scoped>
-.editor-toolbar { position: relative; z-index: 12; display: flex; width: 100%; height: var(--toolbar-height); flex: 0 0 auto; align-items: center; gap: 4px; padding: 0 14px; border-top: 1px solid var(--border-soft); border-bottom: 1px solid var(--border-soft); background: var(--panel-strong); overflow: visible; }
+.editor-toolbar { position: relative; z-index: 12; display: flex; width: 100%; height: var(--toolbar-height); flex: 0 0 auto; align-items: center; gap: 4px; padding: 0 14px; border-bottom: 1px solid var(--divider-soft); background: var(--panel-strong); overflow: visible; }
 .toolbar-tools { display: flex; min-width: 0; align-items: center; gap: 4px; }
 .toolbar-spacer { min-width: 2px; flex: 1; }
 .block-picker, .more-picker { position: relative; flex: 0 0 auto; }
@@ -291,6 +312,7 @@ function removeLink(): void {
 .block-menu button, .more-menu button { display: flex; width: 100%; height: 32px; align-items: center; gap: 8px; padding: 0 9px; border: 0; border-radius: 6px; background: transparent; color: var(--text-primary); cursor: pointer; font-size: 11px; text-align: left; }
 .block-menu button:hover, .more-menu button:hover:not(:disabled), .block-menu button.active, .more-menu button.active { background: var(--accent-faint); color: var(--accent-strong); }
 .block-menu button span:first-child { flex: 1; }
+.more-separator { height: 1px; margin: 4px 6px; background: var(--divider-soft); }
 .more-menu { right: 0; width: 220px; max-height: min(420px, calc(100vh - 180px)); padding: 5px; overflow-y: auto; }
 .more-menu button span { flex: 1; }
 .more-menu kbd { color: var(--text-tertiary); font: inherit; font-size: 9px; }

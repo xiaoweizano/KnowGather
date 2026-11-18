@@ -22,14 +22,14 @@ function journal(id: string, updatedAt: string): JournalRecord {
 
 describe('knowledge navigation', () => {
   it('maps implemented navigation entries to real pages', () => {
-    expect(resolveNavigationTarget('home')).toEqual({ page: 'library', implemented: true })
+    expect(resolveNavigationTarget('home')).toEqual({ page: 'home', implemented: true })
     expect(resolveNavigationTarget('library')).toEqual({ page: 'library', implemented: true })
     expect(resolveNavigationTarget('journal')).toEqual({ page: 'journal', implemented: true })
+    expect(resolveNavigationTarget('settings')).toEqual({ page: 'settings', implemented: true })
   })
 
   it('keeps unfinished navigation explicit instead of pretending to navigate', () => {
     expect(resolveNavigationTarget('assistant')).toEqual({ page: 'assistant', implemented: false })
-    expect(resolveNavigationTarget('settings')).toEqual({ page: 'settings', implemented: false })
   })
 
   it('counts only today\'s journals using the local calendar date', () => {

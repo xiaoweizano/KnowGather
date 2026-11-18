@@ -3,8 +3,10 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { Editor } from '@tiptap/core'
 import { computePosition, flip, offset, shift } from '@floating-ui/dom'
 import AppIcon from '../../components/AppIcon.vue'
+import { useI18n } from '../../i18n/useI18n'
 
 const props = defineProps<{ editor: Editor }>()
+const { t } = useI18n()
 const controls = ref<HTMLElement | null>(null)
 const revision = ref(0)
 let boundEditor: Editor | null = null
@@ -84,15 +86,15 @@ function deleteTable(): void { run((chain) => chain.deleteTable()) }
 </script>
 
 <template>
-  <div v-if="visible" ref="controls" class="table-controls" role="toolbar" aria-label="表格设置">
-    <button type="button" title="下方增加行" @mousedown.prevent @click="addRow">+ 行</button>
-    <button type="button" title="删除当前行" @mousedown.prevent @click="deleteRow">− 行</button>
+  <div v-if="visible" ref="controls" class="table-controls" role="toolbar" :aria-label="t('editor.table.aria')">
+    <button type="button" :title="t('editor.table.addRowBelow')" @mousedown.prevent @click="addRow">+</button>
+    <button type="button" :title="t('editor.table.deleteRow')" @mousedown.prevent @click="deleteRow">−</button>
     <span class="control-divider" />
-    <button type="button" title="右侧增加列" @mousedown.prevent @click="addColumn">+ 列</button>
-    <button type="button" title="删除当前列" @mousedown.prevent @click="deleteColumn">− 列</button>
+    <button type="button" :title="t('editor.table.addColumnRight')" @mousedown.prevent @click="addColumn">+</button>
+    <button type="button" :title="t('editor.table.deleteColumn')" @mousedown.prevent @click="deleteColumn">−</button>
     <span class="control-divider" />
-    <button type="button" title="切换表头行" @mousedown.prevent @click="toggleHeader">表头</button>
-    <button type="button" class="danger" title="删除表格" aria-label="删除表格" @mousedown.prevent @click="deleteTable">
+    <button type="button" :title="t('editor.table.toggleHeader')" @mousedown.prevent @click="toggleHeader"><AppIcon name="table" :size="14" /></button>
+    <button type="button" class="danger" :title="t('editor.table.deleteTable')" :aria-label="t('editor.table.deleteTable')" @mousedown.prevent @click="deleteTable">
       <AppIcon name="trash" :size="14" />
     </button>
   </div>

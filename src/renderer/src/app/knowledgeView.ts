@@ -1,4 +1,5 @@
 import type { DocumentRecord, JournalRecord } from '../../../shared/document'
+import { currentLocale, translateIn } from '../i18n'
 
 export interface CategoryCount {
   categoryId: string | null
@@ -81,12 +82,21 @@ function localDayNumber(value: Date): number {
   return Date.UTC(value.getFullYear(), value.getMonth(), value.getDate()) / 86400000
 }
 
-export function formatKnowledgeUpdatedAt(value: string, now = new Date()): string {
+export function formatKnowledgeUpdatedAt(value: string, now = new Date(), locale?: string): string {
   const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return '时间未知'
+  if (Number.isNaN(date.getTime())) return translateIn(toLocale(locale), 'time.unknown')
+  const activeLocale = toLocale(locale)
   const dayDifference = localDayNumber(now) - localDayNumber(date)
-  const time = new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false }).format(date)
-  if (dayDifference === 0) return `今天 ${time}`
-  if (dayDifference === 1) return `昨天 ${time}`
-  return new Intl.DateTimeFormat('zh-CN', { month: '2-digit', day: '2-digit' }).format(date).replace('/', '月') + '日'
+  const time = new Intl.DateTimeFormat(activeLocale, { hour: '2-digit', minute: '2-digit', hour12: false }).format(date)
+  if (dayDifference === 0) return translateIn(activeLocale, 'time.today', { time })
+  if (dayDifference === 1) return translateIn(activeLocale, 'time.yesterday', { time })
+  const month = Number(new Intl.DateTimeFormat(activeLocale, { month: '2-digit' }).format(date).replace(/\D/g, ''))
+  // Keep the two-digit day so dates line up in dense lists (`11月01日`, `11/01`).
+  const day = String(new Intl.DateTimeFormat(activeLocale, { day: '2-digit' }).format(date).replace(/\D/g, ''))
+  return translateIn(activeLocale, 'time.monthDay', { month, day })
+}
+
+function toLocale(value: string | undefined): 'zh-CN' | 'en-US' {
+  if (value === 'en-US' || value === 'zh-CN') return value
+  return currentLocale()
 }

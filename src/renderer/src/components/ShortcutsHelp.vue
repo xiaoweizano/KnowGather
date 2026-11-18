@@ -1,43 +1,51 @@
 <script setup lang="ts">
-import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import AppIcon from './AppIcon.vue'
+import { useI18n } from '../i18n/useI18n'
+import { readShortcuts, shortcutLabelKey, SHORTCUT_DEFINITIONS } from '../app/shortcuts'
 
 const props = defineProps<{ open: boolean }>()
 const emit = defineEmits<{ close: [] }>()
 const closeButton = ref<HTMLButtonElement | null>(null)
+const { t } = useI18n()
 
-const shortcutGroups = [
+const shortcutGroups = computed(() => [
   {
-    title: '文本格式',
+    title: t('shortcuts.group.text'),
     items: [
-      ['粗体', 'Ctrl + B'],
-      ['斜体', 'Ctrl + I'],
-      ['下划线', 'Ctrl + U'],
-      ['行内代码', 'Ctrl + E'],
-      ['插入链接', 'Ctrl + K'],
+      [t('shortcuts.bold'), 'Ctrl + B'],
+      [t('shortcuts.italic'), 'Ctrl + I'],
+      [t('shortcuts.underline'), 'Ctrl + U'],
+      [t('shortcuts.inlineCode'), 'Ctrl + E'],
+      [t('shortcuts.insertLink'), 'Ctrl + K'],
     ],
   },
   {
-    title: '块与列表',
+    title: t('shortcuts.group.blocks'),
     items: [
-      ['标题 1 / 2 / 3', 'Ctrl + Alt + 1 / 2 / 3'],
-      ['无序列表', 'Ctrl + Shift + 8'],
-      ['有序列表', 'Ctrl + Shift + 7'],
-      ['任务列表', 'Ctrl + Shift + 9'],
-      ['插入内容菜单', '输入 /'],
+      [t('shortcuts.headings'), 'Ctrl + Alt + 1 / 2 / 3'],
+      [t('shortcuts.bulletList'), 'Ctrl + Shift + 8'],
+      [t('shortcuts.orderedList'), 'Ctrl + Shift + 7'],
+      [t('shortcuts.taskList'), 'Ctrl + Shift + 9'],
+      [t('shortcuts.slashMenu'), '/'],
     ],
   },
   {
-    title: '编辑与导航',
+    title: t('shortcuts.group.navigation'),
     items: [
-      ['撤销', 'Ctrl + Z'],
-      ['重做', 'Ctrl + Shift + Z'],
-      ['增加 / 减少缩进', 'Tab / Shift + Tab'],
-      ['关闭浮层', 'Esc'],
-      ['专注模式', 'Ctrl + Shift + F'],
+      [t('shortcuts.undo'), 'Ctrl + Z'],
+      [t('shortcuts.redo'), 'Ctrl + Shift + Z'],
+      [t('shortcuts.indent'), 'Tab / Shift + Tab'],
+      [t('shortcuts.escape'), 'Esc'],
     ],
   },
-] as const
+  {
+    title: t('shortcuts.group.app'),
+    items: SHORTCUT_DEFINITIONS
+      .filter((definition) => definition.group === 'app')
+      .map((definition) => [t(shortcutLabelKey(definition.id)), readShortcuts()[definition.id]]),
+  },
+])
 
 watch(() => props.open, (open) => {
   if (open) void nextTick(() => closeButton.value?.focus())
@@ -56,16 +64,16 @@ onBeforeUnmount(() => document.removeEventListener('keydown', handleKeydown))
 
 <template>
   <Teleport to="body">
-    <Transition name="dialog">
+    <Transition name="fade">
       <div v-if="props.open" class="shortcut-backdrop" role="presentation" @mousedown.self="emit('close')">
         <section class="shortcut-dialog" role="dialog" aria-modal="true" aria-labelledby="shortcut-title">
           <header>
             <span class="shortcut-mark"><AppIcon name="keyboard" :size="18" /></span>
             <div>
-              <h2 id="shortcut-title">键盘快捷键</h2>
-              <p>保持双手停留在键盘上，快速完成常用编辑操作。</p>
+              <h2 id="shortcut-title">{{ t('shortcuts.title') }}</h2>
+              <p>{{ t('shortcuts.subtitle') }}</p>
             </div>
-            <button ref="closeButton" type="button" class="dialog-close" aria-label="关闭快捷键帮助" @click="emit('close')">
+            <button ref="closeButton" type="button" class="dialog-close" :aria-label="t('shortcuts.close')" @click="emit('close')">
               <AppIcon name="x" :size="17" />
             </button>
           </header>
@@ -74,7 +82,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', handleKeydown))
             <section v-for="group in shortcutGroups" :key="group.title">
               <h3>{{ group.title }}</h3>
               <dl>
-                <template v-for="item in group.items" :key="item[0]">
+                <template v-for="item in group.items" :key="`${group.title}-${item[0]}`">
                   <dt>{{ item[0] }}</dt>
                   <dd><kbd>{{ item[1] }}</kbd></dd>
                 </template>
@@ -82,13 +90,12 @@ onBeforeUnmount(() => document.removeEventListener('keydown', handleKeydown))
             </section>
           </div>
 
-          <footer>输入 <kbd>/</kbd> 可打开内容插入菜单；选中文本后会出现格式浮层。</footer>
+          <footer>{{ t('shortcuts.editorNote') }}</footer>
         </section>
       </div>
     </Transition>
   </Teleport>
 </template>
-
 <style scoped>
 .shortcut-backdrop {
   position: fixed;

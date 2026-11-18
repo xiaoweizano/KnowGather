@@ -1,4 +1,4 @@
-import type { DocumentSavePayload, SaveReceipt } from '../../../shared/document'
+import type { SaveReceipt } from '../../../shared/document'
 
 export type SavePhase = 'idle' | 'dirty' | 'saving' | 'saved' | 'error'
 
@@ -11,18 +11,18 @@ export interface AutoSaveState {
   lastSavedAt: string | null
 }
 
-export interface AutoSaveOptions {
+export interface AutoSaveOptions<TPayload extends { revision: number }> {
   delay?: number
-  save: (payload: DocumentSavePayload) => Promise<SaveReceipt>
+  save: (payload: TPayload) => Promise<SaveReceipt>
   onStateChange?: (state: AutoSaveState) => void
 }
 
-export class AutoSaveController {
+export class AutoSaveController<TPayload extends { revision: number } = { revision: number }> {
   private readonly delay: number
-  private readonly save: AutoSaveOptions['save']
-  private readonly onStateChange?: AutoSaveOptions['onStateChange']
+  private readonly save: AutoSaveOptions<TPayload>['save']
+  private readonly onStateChange?: AutoSaveOptions<TPayload>['onStateChange']
   private timer: ReturnType<typeof setTimeout> | null = null
-  private pending: DocumentSavePayload | null = null
+  private pending: TPayload | null = null
   private inFlight: Promise<boolean> | null = null
   private state: AutoSaveState = {
     phase: 'idle',
@@ -33,7 +33,7 @@ export class AutoSaveController {
     lastSavedAt: null,
   }
 
-  constructor(options: AutoSaveOptions) {
+  constructor(options: AutoSaveOptions<TPayload>) {
     this.delay = options.delay ?? 800
     this.save = options.save
     this.onStateChange = options.onStateChange
@@ -43,7 +43,7 @@ export class AutoSaveController {
     return { ...this.state }
   }
 
-  schedule(payload: DocumentSavePayload): void {
+  schedule(payload: TPayload): void {
     this.pending = payload
     this.setState({
       phase: 'dirty',

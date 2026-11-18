@@ -7,33 +7,50 @@ import { useDocumentStore } from '../stores/document'
 import { getShizhiApi } from '../services/api'
 import { showTrafficLights } from '../../../shared/platform'
 import { countJournalsForLocalDate, type NavigationKey } from '../app/knowledgeNavigation'
+import { useI18n } from '../i18n/useI18n'
 
 defineProps<{ activeItem: NavigationKey }>()
 const emit = defineEmits<{ navigate: [key: NavigationKey] }>()
 
 const ui = useUiStore()
 const documentStore = useDocumentStore()
+const { t } = useI18n()
 const platform = getShizhiApi().platform
 const todayJournalCount = computed(() => countJournalsForLocalDate(documentStore.journals))
 
-const navigation: Array<{ id: NavigationKey; label: string; icon: string }> = [
-  { id: 'home', label: '首页', icon: 'home' },
-  { id: 'library', label: '知识库', icon: 'library' },
-  { id: 'journal', label: '日志', icon: 'journal' },
-  { id: 'assistant', label: 'AI 助手', icon: 'sparkles' },
-  { id: 'settings', label: '设置', icon: 'settings' },
+// Width lives on the component instead of a global ancestor selector: scoped
+// styles and ancestor overrides end up with equal specificity, so the width was
+// previously always won by the default rule.
+const railStyle = computed(() => ({
+  width: `${ui.navigationCollapsed ? COLLAPSED_RAIL_WIDTH : ui.navigationWidth}px`,
+}))
+
+const navigation: Array<{ id: NavigationKey; labelKey: string; icon: string }> = [
+  { id: 'home', labelKey: 'nav.home', icon: 'home' },
+  { id: 'library', labelKey: 'nav.library', icon: 'library' },
+  { id: 'journal', labelKey: 'nav.journal', icon: 'journal' },
+  { id: 'assistant', labelKey: 'nav.assistant', icon: 'sparkles' },
+  { id: 'settings', labelKey: 'nav.settings', icon: 'settings' },
 ]
+
+const COLLAPSED_RAIL_WIDTH = 70
 </script>
 
 <template>
-  <aside class="navigation-rail" aria-label="主导航">
+  <aside
+    v-if="!ui.focusMode"
+    class="navigation-rail"
+    :class="{ collapsed: ui.navigationCollapsed }"
+    :style="railStyle"
+    :aria-label="t('nav.aria')"
+  >
     <div v-if="showTrafficLights(platform)" class="window-controls" aria-hidden="true">
       <span class="window-dot dot-red" />
       <span class="window-dot dot-amber" />
       <span class="window-dot dot-green" />
     </div>
 
-    <button class="brand" type="button" title="拾知首页" @click="emit('navigate', 'home')">
+    <button class="brand" type="button" :title="t('nav.brandHome')" @click="emit('navigate', 'home')">
       <span class="brand-mark">
         <svg viewBox="0 0 32 32" aria-hidden="true">
           <path d="M9 7.5h14v17H9z" fill="currentColor" opacity=".2" />
@@ -42,8 +59,8 @@ const navigation: Array<{ id: NavigationKey; label: string; icon: string }> = [
         </svg>
       </span>
       <span v-if="!ui.navigationCollapsed" class="brand-copy">
-        <strong>拾知</strong>
-        <small>SHIZHI</small>
+        <strong>{{ t('common.appName') }}</strong>
+        <small>{{ t('common.appTagline') }}</small>
       </span>
     </button>
 
@@ -54,31 +71,32 @@ const navigation: Array<{ id: NavigationKey; label: string; icon: string }> = [
         class="navigation-item"
         :class="{ active: activeItem === item.id }"
         type="button"
-        :title="item.label"
+        :data-nav="item.id"
+        :title="t(item.labelKey)"
         @click="emit('navigate', item.id)"
       >
         <span class="navigation-icon"><AppIcon :name="item.icon" :size="19" /></span>
-        <span v-if="!ui.navigationCollapsed" class="navigation-label">{{ item.label }}</span>
-        <span v-if="item.id === 'assistant' && !ui.navigationCollapsed" class="new-badge">NEW</span>
+        <span v-if="!ui.navigationCollapsed" class="navigation-label">{{ t(item.labelKey) }}</span>
+        <span v-if="item.id === 'assistant' && !ui.navigationCollapsed" class="new-badge">{{ t('nav.newBadge') }}</span>
       </button>
     </nav>
 
     <div class="rail-spacer" />
 
-    <section v-if="ui.companionVisible" class="companion-card" aria-label="今日记录">
-      <ShizhiMascot />
+    <section v-if="ui.companionVisible" class="companion-card" :aria-label="t('nav.todayRecordedAria')">
+      <ShizhiMascot :variant="ui.companionStyle" :src="ui.customCompanionUrl" />
       <div v-if="!ui.navigationCollapsed" class="companion-copy">
         <span class="companion-heart">♥</span>
-        <span>今日已记录</span>
+        <span>{{ t('nav.todayRecorded') }}</span>
         <strong>+{{ todayJournalCount }}</strong>
-        <small>继续加油哦～</small>
+        <small>{{ t('nav.keepGoing') }}</small>
       </div>
     </section>
 
     <button
       class="rail-collapse"
       type="button"
-      :title="ui.navigationCollapsed ? '展开导航' : '收起导航'"
+      :title="ui.navigationCollapsed ? t('nav.expand') : t('nav.collapse')"
       @click="ui.navigationCollapsed = !ui.navigationCollapsed"
     >
       <AppIcon :name="ui.navigationCollapsed ? 'chevronRight' : 'chevronLeft'" :size="17" />
@@ -91,12 +109,20 @@ const navigation: Array<{ id: NavigationKey; label: string; icon: string }> = [
   position: relative;
   display: flex;
   flex-direction: column;
-  width: 116px;
   flex: 0 0 auto;
+  /* Without this a flex item refuses to shrink below its content width, so the
+     collapsed width was overridden by the widest child (the mascot card). */
+  min-width: 0;
+  overflow: hidden;
   padding: 16px 12px 14px;
   border-right: 1px solid var(--border-soft);
   background: var(--panel-bg);
-  transition: width 180ms ease;
+  transition: width 180ms ease, padding 180ms ease;
+}
+
+.navigation-rail.collapsed {
+  padding-right: 9px;
+  padding-left: 9px;
 }
 
 .window-controls {
@@ -293,34 +319,29 @@ const navigation: Array<{ id: NavigationKey; label: string; icon: string }> = [
   cursor: pointer;
 }
 
-:global(.is-navigation-collapsed) .navigation-rail {
-  width: 70px;
-  padding-right: 9px;
-  padding-left: 9px;
-}
-
-:global(.is-navigation-collapsed) .brand-copy,
-:global(.is-navigation-collapsed) .navigation-label,
-:global(.is-navigation-collapsed) .new-badge {
+/*
+ * Collapsed and focus states are bound through component state (the `collapsed`
+ * class and a v-if) rather than ancestor selectors. Vue's scoped compiler gives
+ * scoped rules and ancestor overrides equal specificity, so ancestor-based rules
+ * used to lose against the component's own default width.
+ */
+.navigation-rail.collapsed .brand-copy,
+.navigation-rail.collapsed .navigation-label,
+.navigation-rail.collapsed .new-badge {
   display: none;
 }
 
-:global(.is-navigation-collapsed) .navigation-item {
+.navigation-rail.collapsed .navigation-item {
   justify-content: center;
   padding: 0;
 }
 
-:global(.is-navigation-collapsed) .companion-card {
+.navigation-rail.collapsed .companion-card {
   padding: 7px;
 }
 
-:global(.is-navigation-collapsed) .companion-card :deep(.shizhi-mascot) {
+.navigation-rail.collapsed .companion-card :deep(.shizhi-mascot) {
   width: 46px;
   margin: 0 auto;
-}
-
-:global(.is-focus-mode) .navigation-rail,
-:global(.is-focus-mode) .resource-sidebar {
-  display: none;
 }
 </style>

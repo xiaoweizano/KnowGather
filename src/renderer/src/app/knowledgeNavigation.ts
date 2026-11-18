@@ -1,6 +1,6 @@
 import type { JournalRecord } from '../../../shared/document'
 
-export type AppPage = 'library' | 'journal' | 'assistant' | 'settings'
+export type AppPage = 'home' | 'library' | 'journal' | 'assistant' | 'settings'
 export type NavigationKey = 'home' | 'library' | 'journal' | 'assistant' | 'settings'
 
 export interface NavigationTarget {
@@ -9,10 +9,8 @@ export interface NavigationTarget {
 }
 
 export function resolveNavigationTarget(key: NavigationKey): NavigationTarget {
-  if (key === 'assistant' || key === 'settings') {
-    return { page: key, implemented: false }
-  }
-  return { page: key === 'journal' ? 'journal' : 'library', implemented: true }
+  if (key === 'assistant') return { page: 'assistant', implemented: false }
+  return { page: key, implemented: true }
 }
 
 function localDateKey(value: Date): string {
@@ -39,4 +37,14 @@ export interface KnowledgeSearchShortcut {
 
 export function shouldFocusKnowledgeSearch(event: KnowledgeSearchShortcut): boolean {
   return !event.isComposing && event.key.toLowerCase() === 'k' && (event.ctrlKey || event.metaKey)
+}
+
+/**
+ * The knowledge search shortcut must not steal Ctrl+K from the editor, where the
+ * same combination inserts a link. Any keystroke that starts inside the document
+ * body belongs to the editor.
+ */
+export function shouldYieldShortcutToEditor(target: EventTarget | null | undefined): boolean {
+  if (!target || typeof (target as Element).closest !== 'function') return false
+  return (target as Element).closest('.shizhi-editor') !== null
 }

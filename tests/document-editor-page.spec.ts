@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest'
 const pagePath = fileURLToPath(new URL('../src/renderer/src/app/DocumentEditorPage.vue', import.meta.url))
 const navigationPath = fileURLToPath(new URL('../src/renderer/src/components/NavigationRail.vue', import.meta.url))
 const sidebarPath = fileURLToPath(new URL('../src/renderer/src/components/ResourceSidebar.vue', import.meta.url))
+const journalPath = fileURLToPath(new URL('../src/renderer/src/components/JournalPage.vue', import.meta.url))
 
 function source(path: string): string {
   return readFileSync(path, 'utf8')
@@ -35,15 +36,20 @@ describe('document editor page shell', () => {
     expect(page).toContain('resolveNavigationTarget')
   })
 
-  it('renders a real journal page backed by the store and labels unfinished pages honestly', () => {
+  it('renders a real editable journal page backed by the store and labels unfinished pages honestly', () => {
     const page = source(pagePath)
+    const journal = source(journalPath)
 
-    expect(page).toContain('documentStore.createJournal')
-    expect(page).toContain('documentStore.deleteJournal')
-    expect(page).toContain('documentStore.journals')
+    expect(page).toContain('<JournalPage')
     expect(page).toContain("activePage.page === 'journal'")
-    expect(page).toContain('日志编辑尚未接入，当前仅展示')
-    expect(page).toContain('该页面尚未实现')
+    expect(page).toContain("t('library.pageUnavailable')")
+    expect(journal).toContain('documentStore.createJournal')
+    expect(journal).toContain('documentStore.deleteJournal')
+    expect(journal).toContain('documentStore.selectJournal')
+    expect(journal).toContain('documentStore.updateJournalContent')
+    // Journal editing now shares the document editor pane, so the two views
+    // behave identically instead of drifting apart.
+    expect(journal).toContain('EditorPane')
   })
 
   it('shows the real local journal count and uses the IME-safe search shortcut', () => {

@@ -1,4 +1,5 @@
 import type { Editor } from '@tiptap/core'
+import { translate } from '../../i18n'
 
 export type EditorCommand =
   | 'paragraph' | 'heading1' | 'heading2' | 'heading3'
@@ -94,8 +95,8 @@ export function canRunEditorCommand(editor: Editor, command: EditorCommand): boo
 }
 
 export function getActiveBlockLabel(editor: Editor): string {
-  if (editor.isActive('heading', { level: 1 })) return '标题 1'
-  if (editor.isActive('heading', { level: 2 })) return '标题 2'
-  if (editor.isActive('heading', { level: 3 })) return '标题 3'
-  return '正文'
+  if (editor.isActive('heading', { level: 1 })) return translate('editor.block.heading1')
+  if (editor.isActive('heading', { level: 2 })) return translate('editor.block.heading2')
+  if (editor.isActive('heading', { level: 3 })) return translate('editor.block.heading3')
+  return translate('editor.block.paragraph')
 }

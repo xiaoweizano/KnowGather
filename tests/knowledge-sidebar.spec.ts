@@ -64,12 +64,12 @@ describe('knowledge sidebar data', () => {
       journals,
     )
 
-    expect(tree.map((node) => ({ id: node.categoryId, label: node.label, count: node.count }))).toEqual([
-      { id: 'all', label: '全部知识', count: 5 },
-      { id: null, label: '未分类', count: 1 },
-      { id: 'empty', label: '空分类', count: 0 },
-      { id: 'study', label: '学习', count: 1 },
-      { id: 'work', label: '工作', count: 3 },
+    expect(tree.map((node) => ({ id: node.categoryId, label: node.label, key: node.labelKey, count: node.count }))).toEqual([
+      { id: 'all', label: '全部知识', key: 'library.treeAll', count: 5 },
+      { id: null, label: '未分类', key: 'library.treeUncategorized', count: 1 },
+      { id: 'empty', label: '空分类', key: null, count: 0 },
+      { id: 'study', label: '学习', key: null, count: 1 },
+      { id: 'work', label: '工作', key: null, count: 3 },
     ])
   })
 
@@ -96,16 +96,13 @@ describe('knowledge sidebar data', () => {
     expect(limitKnowledgeEntries(entries, true, 2).map((entry) => entry.id)).toHaveLength(5)
   })
 
-  it('only enables real editable entries and labels unfinished journal editing', () => {
+  it('treats both documents and journals as editable entries', () => {
     const entries = filterKnowledgeEntries(documents, journals, { categoryId: 'all', query: '' })
     const journalEntry = entries.find((entry) => entry.kind === 'journal') as KnowledgeEntry
     const documentEntry = entries.find((entry) => entry.kind === 'document') as KnowledgeEntry
 
     expect(resolveKnowledgeEntryAction(documentEntry)).toEqual({ enabled: true })
-    expect(resolveKnowledgeEntryAction(journalEntry)).toEqual({
-      enabled: false,
-      reason: '日志编辑尚未接入，当前仅展示',
-    })
+    expect(resolveKnowledgeEntryAction(journalEntry)).toEqual({ enabled: true })
   })
 
   it('trims category names and rejects empty, overlong, and duplicate names before persistence', () => {
@@ -116,16 +113,19 @@ describe('knowledge sidebar data', () => {
       valid: false,
       name: '',
       error: '请输入分类名称',
+      errorKey: 'library.validation.empty',
     })
     expect(validateCategoryDraft('x'.repeat(81), categories)).toEqual({
       valid: false,
       name: 'x'.repeat(81),
       error: '分类名称不能超过 80 个字符',
+      errorKey: 'library.validation.tooLong',
     })
     expect(validateCategoryDraft(' 工作 ', categories)).toEqual({
       valid: false,
       name: '工作',
       error: '已存在同名分类',
+      errorKey: 'library.validation.duplicate',
     })
   })
 })

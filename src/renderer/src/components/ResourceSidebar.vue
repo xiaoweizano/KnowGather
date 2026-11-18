@@ -4,12 +4,21 @@ import AppIcon from './AppIcon.vue'
 import { useDocumentStore } from '../stores/document'
 import { useUiStore } from '../stores/ui'
 import { getShizhiApi } from '../services/api'
+import ContextMenu from './ContextMenu.vue'
+import PromptDialog from './PromptDialog.vue'
+import ConfirmDialog from './ConfirmDialog.vue'
+import { useI18n } from '../i18n/useI18n'
+import {
+  buildCategoryMenu,
+  buildEntryMenu,
+  categoryMoveTarget,
+  type ContextMenuItem,
+} from '../app/knowledgeContextMenu'
 import { formatShortcut } from '../../../shared/platform'
-import { shouldFocusKnowledgeSearch } from '../app/knowledgeNavigation'
+import { shouldFocusKnowledgeSearch, shouldYieldShortcutToEditor } from '../app/knowledgeNavigation'
 import {
   buildKnowledgeCategoryTree,
   limitKnowledgeEntries,
-  resolveKnowledgeEntryAction,
   validateCategoryDraft,
 } from '../app/knowledgeSidebar'
 import {
@@ -26,10 +35,13 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   retryLoad: []
+  importDocuments: [categoryId?: string | null]
+  notify: [message: string]
 }>()
 
 const documentStore = useDocumentStore()
 const ui = useUiStore()
+const { t } = useI18n()
 const shortcut = formatShortcut(getShizhiApi().platform, 'K')
 const query = ref('')
 const selectedCategoryId = ref<string | null>('all')
@@ -43,6 +55,11 @@ const searchInput = ref<HTMLInputElement | null>(null)
 const categoryMenu = ref<HTMLElement | null>(null)
 const categoryInput = ref<HTMLInputElement | null>(null)
 const recentLimit = 5
+const contextMenu = ref<{ open: boolean; x: number; y: number; items: ContextMenuItem[] }>({
+  open: false, x: 0, y: 0, items: [],
+})
+const pendingAction = ref<{ kind: 'rename-document' | 'rename-journal' | 'rename-category' | 'delete-document' | 'delete-journal' | 'delete-category'; id: string; name: string } | null>(null)
+const promptError = ref<string | null>(null)
 
 const categoryTree = computed(() => buildKnowledgeCategoryTree(
   documentStore.categories,
@@ -66,17 +83,17 @@ const canExpand = computed(() => !query.value.trim() && filteredEntries.value.le
 
 const saveStatus = computed(() => {
   const state = documentStore.saveState
-  if (state.phase === 'saving') return { label: '正在保存', detail: '正在写入本机', tone: 'saving' }
-  if (state.phase === 'dirty') return { label: '有未保存更改', detail: '稍后自动保存', tone: 'dirty' }
-  if (state.phase === 'error') return { label: '保存失败', detail: state.error ?? '请重试', tone: 'error' }
+  if (state.phase === 'saving') return { label: t('library.status.saving'), detail: t('library.status.savingDetail'), tone: 'saving' }
+  if (state.phase === 'dirty') return { label: t('library.status.dirty'), detail: t('library.status.dirtyDetail'), tone: 'dirty' }
+  if (state.phase === 'error') return { label: t('library.status.error'), detail: state.error ?? t('common.pleaseRetry'), tone: 'error' }
   if (state.phase === 'saved' && state.lastSavedAt) {
-    return { label: '已保存到本机', detail: formatKnowledgeUpdatedAt(state.lastSavedAt), tone: 'saved' }
+    return { label: t('library.status.saved'), detail: formatKnowledgeUpdatedAt(state.lastSavedAt), tone: 'saved' }
   }
-  if (props.loadError) return { label: '读取失败', detail: '请重试', tone: 'error' }
+  if (props.loadError) return { label: t('library.readFailed'), detail: t('common.pleaseRetry'), tone: 'error' }
   if (documentStore.categories.length === 0 && documentStore.documents.length === 0 && documentStore.journals.length === 0) {
-    return { label: '本地知识库为空', detail: '新建内容后会写入本机', tone: 'idle' }
+    return { label: t('library.status.empty'), detail: t('library.status.emptyDetail'), tone: 'idle' }
   }
-  return { label: '已从本机读取', detail: '更改将自动保存', tone: 'saved' }
+  return { label: t('library.status.loaded'), detail: t('library.status.loadedDetail'), tone: 'saved' }
 })
 
 function categoryKey(categoryId: string | null): string {
@@ -89,9 +106,11 @@ function selectCategory(categoryId: string | null): void {
 }
 
 function selectEntry(entry: KnowledgeEntry): void {
-  const action = resolveKnowledgeEntryAction(entry)
-  if (!action.enabled) return
-  if (entry.kind === 'document') void documentStore.selectDocument(entry.id)
+  if (entry.kind === 'journal') {
+    void documentStore.selectJournal(entry.id)
+    return
+  }
+  void documentStore.selectDocument(entry.id)
 }
 
 function entryTone(entry: KnowledgeEntry): string {
@@ -100,6 +119,172 @@ function entryTone(entry: KnowledgeEntry): string {
 
 function entryIcon(entry: KnowledgeEntry): string {
   return entry.kind === 'journal' ? 'journal' : 'file'
+}
+
+/* ------------------------------------------------------------ context menu */
+
+function openCategoryMenuAt(event: MouseEvent, categoryId: string | null): void {
+  event.preventDefault()
+  const menu = buildCategoryMenu({
+    categoryId,
+    isVirtual: categoryId === 'all',
+    categoryName: categoryTree.value.find((node) => node.categoryId === categoryId)?.label,
+  })
+  showContextMenu(event, menu)
+}
+
+function openEntryMenuAt(event: MouseEvent, entry: KnowledgeEntry): void {
+  event.preventDefault()
+  const menu = buildEntryMenu({
+    kind: entry.kind,
+    favorite: entry.kind === 'document' ? entry.record.favorite : false,
+    categories: documentStore.categories.map((category) => ({ id: category.id, name: category.name })),
+    categoryId: entry.categoryId,
+  })
+  contextEntry.value = entry
+  showContextMenu(event, menu)
+}
+
+const contextEntry = ref<KnowledgeEntry | null>(null)
+
+function showContextMenu(event: MouseEvent, items: ContextMenuItem[]): void {
+  contextMenu.value = { open: true, x: event.clientX, y: event.clientY, items }
+}
+
+function openMenuForButton(event: MouseEvent, entry: KnowledgeEntry): void {
+  // Anchor the same menu to the "⋯" button so the actions are discoverable
+  // without knowing about right-click.
+  const target = event.currentTarget as HTMLElement | null
+  const rect = target?.getBoundingClientRect()
+  openEntryMenuAt(
+    { preventDefault: () => undefined, clientX: rect?.left ?? 0, clientY: rect?.bottom ?? 0 } as MouseEvent,
+    entry,
+  )
+}
+
+async function handleContextSelect(item: ContextMenuItem): Promise<void> {
+  const entry = contextEntry.value
+  const moveTarget = categoryMoveTarget(item.id)
+  if (moveTarget !== undefined && entry) {
+    const ok = entry.kind === 'document'
+      ? await documentStore.moveDocument(entry.id, moveTarget)
+      : await documentStore.moveJournal(entry.id, moveTarget)
+    if (!ok) emit('notify', documentStore.error ?? t('library.context.moveFailed'))
+    return
+  }
+
+  switch (item.id) {
+    case 'new-document':
+      await createDocument()
+      return
+    case 'import':
+      emit('importDocuments', selectedCategoryId.value === 'all' ? null : selectedCategoryId.value)
+      return
+    case 'open':
+      if (entry) selectEntry(entry)
+      return
+    case 'rename':
+      if (entry) {
+        promptError.value = null
+        pendingAction.value = {
+          kind: entry.kind === 'document' ? 'rename-document' : 'rename-journal',
+          id: entry.id,
+          name: entry.title,
+        }
+      }
+      return
+    case 'favorite':
+      if (entry?.kind === 'document') {
+        const ok = await documentStore.setDocumentFavorite(entry.id, !entry.record.favorite)
+        emit('notify', ok
+          ? (entry.record.favorite ? t('library.favoriteRemoved') : t('library.favoriteAdded'))
+          : (documentStore.error ?? t('common.saveFailed')))
+      }
+      return
+    case 'copy-title':
+      if (entry) {
+        try {
+          await navigator.clipboard.writeText(entry.title)
+          emit('notify', t('library.copiedTitle'))
+        } catch {
+          emit('notify', t('document.toast.shareFailed'))
+        }
+      }
+      return
+    case 'delete':
+      if (entry) {
+        pendingAction.value = {
+          kind: entry.kind === 'document' ? 'delete-document' : 'delete-journal',
+          id: entry.id,
+          name: entry.title,
+        }
+      }
+      return
+    case 'rename-category':
+      if (selectedCategoryId.value && selectedCategoryId.value !== 'all') {
+        const category = documentStore.categories.find((item) => item.id === selectedCategoryId.value)
+        if (category) {
+          promptError.value = null
+          pendingAction.value = { kind: 'rename-category', id: category.id, name: category.name }
+        }
+      }
+      return
+    case 'delete-category':
+      if (selectedCategoryId.value && selectedCategoryId.value !== 'all') {
+        const category = documentStore.categories.find((item) => item.id === selectedCategoryId.value)
+        if (category) pendingAction.value = { kind: 'delete-category', id: category.id, name: category.name }
+      }
+      return
+  }
+}
+
+async function submitPrompt(value: string): Promise<void> {
+  const action = pendingAction.value
+  if (!action) return
+  let ok = false
+  if (action.kind === 'rename-document') ok = await documentStore.renameDocument(action.id, value)
+  else if (action.kind === 'rename-journal') ok = await documentStore.renameJournal(action.id, value)
+  else if (action.kind === 'rename-category') ok = (await documentStore.renameCategory(action.id, value)) !== null
+
+  if (!ok) {
+    promptError.value = documentStore.error ?? t('library.context.renameFailed')
+    return
+  }
+  emit('notify', t('library.renamed'))
+  pendingAction.value = null
+}
+
+async function confirmDelete(): Promise<void> {
+  const action = pendingAction.value
+  if (!action) return
+  let ok = false
+  if (action.kind === 'delete-document') ok = await documentStore.deleteDocument(action.id)
+  else if (action.kind === 'delete-journal') ok = await documentStore.deleteJournal(action.id)
+  else if (action.kind === 'delete-category') {
+    ok = await documentStore.deleteCategory(action.id)
+    if (ok) selectedCategoryId.value = 'all'
+  }
+  emit('notify', ok ? t('common.saved') : (documentStore.error ?? t('common.saveFailed')))
+  if (ok) pendingAction.value = null
+}
+
+function promptTitle(): string {
+  const action = pendingAction.value
+  if (!action) return ''
+  if (action.kind === 'rename-category') return t('library.context.renameCategory')
+  return t('library.context.rename')
+}
+
+function confirmConfig(): { title: string; description: string } {
+  const action = pendingAction.value
+  if (!action) return { title: '', description: '' }
+  if (action.kind === 'delete-category') {
+    return { title: t('library.context.deleteCategory'), description: t('library.confirmDeleteCategory', { name: action.name }) }
+  }
+  if (action.kind === 'delete-journal') {
+    return { title: t('library.context.delete'), description: t('library.confirmDeleteJournal', { name: action.name }) }
+  }
+  return { title: t('library.context.delete'), description: t('library.confirmDeleteDocument', { name: action.name }) }
 }
 
 async function createDocument(): Promise<void> {
@@ -168,7 +353,7 @@ function handleSearchEscape(): void {
 }
 
 function handleGlobalKeydown(event: KeyboardEvent): void {
-  if (shouldFocusKnowledgeSearch(event)) {
+  if (shouldFocusKnowledgeSearch(event) && !shouldYieldShortcutToEditor(event.target)) {
     event.preventDefault()
     focusSearch()
     return
@@ -197,17 +382,28 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <aside v-if="ui.sidebarVisible" class="resource-sidebar" aria-label="知识库资源树">
+  <aside v-if="ui.sidebarVisible && !ui.focusMode" class="resource-sidebar" :aria-label="t('library.aria')">
     <header class="resource-heading">
-      <h1>我的知识库</h1>
+      <h1>{{ t('library.title') }}</h1>
       <div class="resource-actions">
+        <button
+          type="button"
+          class="subtle-round"
+          :title="t('library.importTitle')"
+          :aria-label="t('library.importTitle')"
+          data-testid="sidebar-import"
+          :disabled="Boolean(props.loadError) || props.initializing"
+          @click="emit('importDocuments')"
+        >
+          <AppIcon name="filePlus" :size="15" />
+        </button>
         <div class="category-menu-anchor">
           <button
             type="button"
             class="subtle-round new-category-button"
             :class="{ active: categoryMenuOpen }"
-            title="新建分类"
-            aria-label="新建分类"
+            :title="t('library.newCategoryTitle')"
+            :aria-label="t('library.newCategoryTitle')"
             :aria-expanded="categoryMenuOpen"
             @click="categoryMenuOpen ? closeCategoryMenu() : openCategoryMenu()"
           >
@@ -221,21 +417,21 @@ onBeforeUnmount(() => {
             @submit.prevent="submitCategory"
             @invalid.capture="handleCategoryInvalid"
           >
-            <label for="new-category-name">新建分类</label>
+            <label for="new-category-name">{{ t('library.newCategoryLabel') }}</label>
             <input
               id="new-category-name"
               ref="categoryInput"
               v-model="categoryDraft"
               maxlength="80"
               autocomplete="off"
-              placeholder="输入分类名称"
+              :placeholder="t('library.newCategoryPlaceholder')"
               :disabled="creatingCategory"
             />
             <p v-if="categoryError" class="popover-error" role="alert">{{ categoryError }}</p>
             <div class="popover-actions">
-              <button type="button" :disabled="creatingCategory" @click="closeCategoryMenu">取消</button>
+              <button type="button" :disabled="creatingCategory" @click="closeCategoryMenu">{{ t('common.cancel') }}</button>
               <button type="submit" class="popover-primary" :disabled="creatingCategory">
-                {{ creatingCategory ? '正在创建…' : '创建分类' }}
+                {{ creatingCategory ? t('library.creatingCategory') : t('library.createCategory') }}
               </button>
             </div>
           </form>
@@ -243,8 +439,9 @@ onBeforeUnmount(() => {
         <button
           type="button"
           class="add-round"
-          title="新建文档"
-          aria-label="新建文档"
+          :title="t('library.newDocumentTitle')"
+          :aria-label="t('library.newDocumentTitle')"
+          data-testid="sidebar-new-document"
           :disabled="creatingDocument || Boolean(props.loadError) || props.initializing"
           @click="createDocument"
         >
@@ -259,14 +456,14 @@ onBeforeUnmount(() => {
         ref="searchInput"
         v-model="query"
         type="search"
-        placeholder="搜索文档、标签、日志..."
-        aria-label="搜索文档、标签、日志"
+        :placeholder="t('library.searchPlaceholder')"
+        :aria-label="t('library.searchAria')"
         @keydown.esc.prevent="handleSearchEscape"
       />
       <kbd>{{ shortcut }}</kbd>
     </label>
 
-    <nav class="tree" aria-label="知识库目录">
+    <nav class="tree" :aria-label="t('library.treeAria')">
       <template v-for="item in categoryTree" :key="categoryKey(item.categoryId)">
         <button
           class="tree-row"
@@ -274,6 +471,7 @@ onBeforeUnmount(() => {
           type="button"
           :aria-current="selectedCategoryId === item.categoryId ? 'page' : undefined"
           @click="selectCategory(item.categoryId)"
+          @contextmenu="openCategoryMenuAt($event, item.categoryId)"
         >
           <AppIcon :name="item.categoryId === 'all' ? 'library' : 'folder'" :size="15" class="tree-caret" />
           <span class="folder-icon"><AppIcon :name="item.categoryId === 'all' ? 'library' : 'folder'" :size="17" /></span>
@@ -285,16 +483,16 @@ onBeforeUnmount(() => {
 
     <section v-if="props.loadError" class="sidebar-state" role="alert">
       <AppIcon name="info" :size="21" />
-      <strong>知识库无法读取</strong>
+      <strong>{{ t('library.loadErrorTitle') }}</strong>
       <span>{{ props.loadError }}</span>
       <button type="button" :disabled="props.initializing" @click="emit('retryLoad')">
-        {{ props.initializing ? '正在读取…' : '重新读取' }}
+        {{ props.initializing ? t('library.readingNow') : t('library.retryLoad') }}
       </button>
     </section>
 
     <section v-else class="recent-section">
       <header class="recent-heading">
-        <h2>{{ query.trim() ? '搜索结果' : '最近编辑' }}</h2>
+        <h2>{{ query.trim() ? t('library.searchResults') : t('library.recentHeading') }}</h2>
         <button
           v-if="canExpand"
           type="button"
@@ -302,37 +500,45 @@ onBeforeUnmount(() => {
           :aria-expanded="expanded"
           @click="expanded = !expanded"
         >
-          {{ expanded ? '收起' : '查看更多' }}
+          {{ expanded ? t('library.collapse') : t('library.viewMore') }}
           <AppIcon :name="expanded ? 'chevronDown' : 'chevronRight'" :size="13" />
         </button>
       </header>
 
       <div class="recent-list">
-        <button
+        <div
           v-for="entry in recentEntries"
           :key="entry.kind + entry.id"
           class="recent-item"
           :class="{ active: entry.kind === 'document' && documentStore.current?.id === entry.id }"
-          type="button"
-          :disabled="!resolveKnowledgeEntryAction(entry).enabled"
-          :title="resolveKnowledgeEntryAction(entry).reason"
           :data-entry-kind="entry.kind"
+          role="button"
+          tabindex="0"
           @click="selectEntry(entry)"
+          @keydown.enter="selectEntry(entry)"
+          @contextmenu="openEntryMenuAt($event, entry)"
         >
           <span class="recent-icon" :class="`tone-${entryTone(entry)}`"><AppIcon :name="entryIcon(entry)" :size="17" /></span>
           <span class="recent-copy">
             <strong>{{ entry.title }}</strong>
-            <small>{{ entry.kind === 'journal' ? '日志 · ' : '' }}{{ formatKnowledgeUpdatedAt(entry.updatedAt) }}</small>
+            <small>{{ entry.kind === 'journal' ? t('library.journalPrefix') : '' }}{{ formatKnowledgeUpdatedAt(entry.updatedAt) }}</small>
           </span>
-          <span class="recent-more" aria-hidden="true"><AppIcon :name="entry.kind === 'journal' ? 'info' : 'more'" :size="16" /></span>
-        </button>
+          <span v-if="entry.kind === 'document' && entry.record.favorite" class="recent-star" :aria-label="t('library.favoriteBadge')">★</span>
+          <button
+            type="button"
+            class="recent-more"
+            :aria-label="t('common.more')"
+            data-testid="sidebar-entry-menu"
+            @click.stop="openMenuForButton($event, entry)"
+          ><AppIcon name="more" :size="16" /></button>
+        </div>
 
         <div v-if="props.initializing" class="empty-search">
-          <span>正在读取知识库…</span>
+          <span>{{ t('library.loading') }}</span>
         </div>
         <div v-else-if="recentEntries.length === 0" class="empty-search">
           <AppIcon name="search" :size="22" />
-          <span>{{ query.trim() ? '没有找到相关内容' : '当前分类还没有内容' }}</span>
+          <span>{{ query.trim() ? t('library.emptyNoResults') : t('library.emptyCategory') }}</span>
         </div>
       </div>
     </section>
@@ -347,20 +553,51 @@ onBeforeUnmount(() => {
         type="button"
         class="footer-retry"
         @click="documentStore.retrySave()"
-      >重试</button>
+      >{{ t('common.retry') }}</button>
     </footer>
+
+    <ContextMenu
+      :open="contextMenu.open"
+      :x="contextMenu.x"
+      :y="contextMenu.y"
+      :items="contextMenu.items"
+      @select="handleContextSelect"
+      @close="contextMenu.open = false"
+    />
+
+    <PromptDialog
+      :open="pendingAction?.kind.startsWith('rename') === true"
+      :title="promptTitle()"
+      :initial-value="pendingAction?.name ?? ''"
+      :error="promptError"
+      maxlength="120"
+      @submit="submitPrompt"
+      @close="pendingAction = null; promptError = null"
+    />
+
+    <ConfirmDialog
+      :open="pendingAction?.kind.startsWith('delete') === true"
+      :title="confirmConfig().title"
+      :description="confirmConfig().description"
+      :danger="true"
+      :confirm-label="t('common.delete')"
+      @confirm="confirmDelete"
+      @close="pendingAction = null"
+    />
   </aside>
 </template>
 
 <style scoped>
 .resource-sidebar {
   display: flex;
-  width: 302px;
+  width: var(--sidebar-width, 302px);
   flex: 0 0 auto;
   flex-direction: column;
+  min-width: 0;
   min-height: 0;
   border-right: 1px solid var(--border-soft);
   background: var(--panel-bg);
+  transition: width 180ms ease;
 }
 
 .resource-heading {
@@ -398,7 +635,7 @@ onBeforeUnmount(() => {
 
 .add-round {
   border-color: var(--border-soft);
-  background: #f5f3fb;
+  background: var(--surface-chip);
 }
 
 .search-box {
@@ -410,8 +647,8 @@ onBeforeUnmount(() => {
   padding: 0 10px;
   border: 1px solid transparent;
   border-radius: 10px;
-  background: #f4f2f8;
-  color: #8f8a9d;
+  background: var(--surface-input);
+  color: var(--text-secondary);
   transition: border-color 150ms ease, background 150ms ease;
 }
 
@@ -431,12 +668,12 @@ onBeforeUnmount(() => {
 }
 
 .search-box input::placeholder {
-  color: #9a96a7;
+  color: var(--text-placeholder);
 }
 
 .search-box kbd {
   flex: 0 0 auto;
-  color: #a6a1b2;
+  color: var(--text-hint);
   font-family: inherit;
   font-size: 10px;
 }
@@ -444,7 +681,7 @@ onBeforeUnmount(() => {
 .tree {
   flex: 0 0 auto;
   padding: 0 12px 9px;
-  border-bottom: 1px solid #efedf4;
+  border-bottom: 1px solid var(--divider-soft);
 }
 
 .tree-row,
@@ -463,7 +700,7 @@ onBeforeUnmount(() => {
   gap: 7px;
   padding: 0 7px;
   border-radius: 8px;
-  color: #464154;
+  color: var(--text-strong-muted);
   font-size: 13px;
 }
 
@@ -473,13 +710,13 @@ onBeforeUnmount(() => {
 }
 
 .tree-row.tree-root:first-child {
-  background: #f3f1f8;
+  background: var(--surface-hover);
   margin-bottom: 3px;
 }
 
 .tree-caret {
   flex: 0 0 15px;
-  color: #777184;
+  color: var(--text-secondary);
 }
 
 .folder-icon {
@@ -503,7 +740,7 @@ onBeforeUnmount(() => {
 
 .tree-count {
   margin-left: auto;
-  color: #9893a4;
+  color: var(--text-meta);
   font-size: 10px;
   font-variant-numeric: tabular-nums;
 }
@@ -517,7 +754,7 @@ onBeforeUnmount(() => {
   gap: 9px;
   padding: 0 8px;
   border-radius: 8px;
-  color: #625d6e;
+  color: var(--text-row);
   font-size: 12px;
 }
 
@@ -564,7 +801,7 @@ onBeforeUnmount(() => {
   padding: 2px;
   border: 0;
   background: transparent;
-  color: #877de0;
+  color: var(--accent);
   cursor: pointer;
   font-size: 10px;
 }
@@ -576,7 +813,7 @@ onBeforeUnmount(() => {
   gap: 3px;
   overflow-y: auto;
   scrollbar-width: thin;
-  scrollbar-color: #ddd8eb transparent;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
 }
 
 .recent-item {
@@ -597,8 +834,8 @@ onBeforeUnmount(() => {
 }
 
 .recent-item.active {
-  border-color: #ece8fb;
-  background: linear-gradient(90deg, #f4f1ff, #f7f5ff);
+  border-color: var(--border-row-active);
+  background: var(--surface-row-active);
   box-shadow: 0 4px 14px rgba(88, 74, 155, 0.05);
 }
 
@@ -621,7 +858,7 @@ onBeforeUnmount(() => {
 
 .recent-copy strong {
   overflow: hidden;
-  color: #464150;
+  color: var(--text-strong-muted);
   font-size: 11.5px;
   font-weight: 620;
   text-overflow: ellipsis;
@@ -629,13 +866,32 @@ onBeforeUnmount(() => {
 }
 
 .recent-copy small {
-  color: #9b96a8;
+  color: var(--text-meta);
   font-size: 9.5px;
 }
 
 .recent-more {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
   opacity: 0;
-  color: #8f8a9c;
+  transition: opacity var(--motion-fast) var(--ease-out), background var(--motion-fast) var(--ease-out);
+}
+
+.recent-more:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.recent-star {
+  color: #f3bd35;
+  font-size: 11px;
 }
 
 .recent-item:hover .recent-more,
@@ -660,7 +916,7 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 10px;
   margin: 0 17px;
-  border-top: 1px solid #efedf4;
+  border-top: 1px solid var(--divider-soft);
   color: var(--text-secondary);
 }
 
@@ -670,8 +926,8 @@ onBeforeUnmount(() => {
   height: 24px;
   place-items: center;
   border-radius: 50%;
-  background: #e9f7f0;
-  color: #4ca580;
+  background: var(--state-success-bg);
+  color: var(--state-success-fg);
 }
 
 .sync-footer > span:last-child {
@@ -681,23 +937,23 @@ onBeforeUnmount(() => {
 }
 
 .sync-footer strong {
-  color: #615c6d;
+  color: var(--text-row);
   font-size: 10px;
   font-weight: 600;
 }
 
 .sync-footer small {
-  color: #a5a0ae;
+  color: var(--text-meta);
   font-size: 9px;
 }
 
 @media (max-width: 1120px) {
   .resource-sidebar {
-    width: 260px;
+    width: var(--sidebar-width, 302px);
   }
 }
 .category-menu-anchor { position: relative; }
-.subtle-round.active { border-color: #dcd4fb; background: #f0ecff; color: #6957d4; }
+.subtle-round.active { border-color: var(--accent-soft-border); background: var(--accent-soft-bg); color: var(--accent-strong); }
 .subtle-round:disabled, .add-round:disabled { cursor: wait; opacity: .5; }
 .category-popover {
   position: absolute;
@@ -727,8 +983,8 @@ onBeforeUnmount(() => {
   color: var(--text-primary);
   font: inherit;
 }
-.category-popover input:focus { border-color: #9f90e9; box-shadow: 0 0 0 2px #f0ecff; }
-.popover-error { margin: 0; color: #a14956; line-height: 1.45; }
+.category-popover input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft-bg); }
+.popover-error { margin: 0; color: var(--state-danger-fg); line-height: 1.45; }
 .popover-actions { display: flex; justify-content: flex-end; gap: 6px; }
 .popover-actions button {
   height: 27px;
@@ -741,14 +997,14 @@ onBeforeUnmount(() => {
   font: inherit;
 }
 .popover-actions button:disabled { cursor: wait; opacity: .6; }
-.popover-actions .popover-primary { border-color: #7561df; background: #7561df; color: #fff; }
-.tree-row.active { background: #f1edff; color: #5745c1; }
-.tree-row.active .tree-count { color: #7561df; }
+.popover-actions .popover-primary { border-color: var(--accent); background: var(--accent); color: #fff; }
+.tree-row.active { background: var(--accent-faint); color: var(--accent-strong); }
+.tree-row.active .tree-count { color: var(--accent); }
 .tree-row.tree-root:first-child { background: transparent; margin-bottom: 0; }
-.tree-row.tree-root:first-child.active { background: #f1edff; }
+.tree-row.tree-root:first-child.active { background: var(--accent-faint); }
 .recent-item:disabled { cursor: not-allowed; opacity: .7; }
 .recent-item:disabled:hover { background: transparent; }
-.recent-item:disabled .recent-copy small { color: #b1a8bd; }
+.recent-item:disabled .recent-copy small { color: var(--text-tertiary); }
 .sidebar-state {
   display: flex;
   min-height: 0;
@@ -766,23 +1022,23 @@ onBeforeUnmount(() => {
 .sidebar-state button {
   margin-top: 4px;
   padding: 6px 10px;
-  border: 1px solid #7561df;
+  border: 1px solid var(--accent);
   border-radius: 7px;
-  background: #7561df;
+  background: var(--accent);
   color: #fff;
   cursor: pointer;
   font: inherit;
 }
-.save-error .sync-check { background: #fff1f3; color: #a14956; }
-.save-dirty .sync-check, .save-saving .sync-check { background: #fff6e4; color: #b78620; }
-.save-idle .sync-check { background: #f3f1f7; color: #817b8e; }
+.save-error .sync-check { background: var(--state-danger-bg); color: var(--state-danger-fg); }
+.save-dirty .sync-check, .save-saving .sync-check { background: var(--state-warning-bg); color: var(--state-warning-fg); }
+.save-idle .sync-check { background: var(--surface-hover); color: var(--text-secondary); }
 .footer-retry {
   margin-left: auto;
-  border: 1px solid #efd5d8;
+  border: 1px solid var(--state-danger-border);
   border-radius: 6px;
   padding: 4px 7px;
-  background: #fff7f8;
-  color: #a14956;
+  background: var(--state-danger-bg);
+  color: var(--state-danger-fg);
   cursor: pointer;
   font: inherit;
   font-size: 9px;

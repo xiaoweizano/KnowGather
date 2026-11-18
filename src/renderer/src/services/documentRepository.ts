@@ -75,6 +75,7 @@ export class BrowserDocumentRepository implements KnowledgeRepository {
       title: payload.title.trim() || '无标题文档',
       categoryId: payload.categoryId,
       tags: [...payload.tags],
+      favorite: payload.favorite,
       content: clone(payload.content),
       revision: payload.revision,
       version: Math.max(payload.version, (current?.version ?? 0) + 1),

@@ -6,9 +6,12 @@ import AppIcon from '../../components/AppIcon.vue'
 import {
   filterSlashMenuItems,
   moveMenuSelection,
+  slashItemDescription,
+  slashItemLabel,
   type SlashMenuItem,
   type SlashTrigger,
 } from '../core/overlayModel'
+import { useI18n } from '../../i18n/useI18n'
 
 const props = defineProps<{
   editor: Editor
@@ -20,6 +23,7 @@ const emit = defineEmits<{
   close: []
 }>()
 
+const { t } = useI18n()
 const menu = ref<HTMLElement | null>(null)
 const selectedIndex = ref(0)
 const items = computed(() => filterSlashMenuItems(props.trigger.query))
@@ -99,10 +103,10 @@ function selectItem(item: SlashMenuItem): void {
 </script>
 
 <template>
-  <div ref="menu" class="slash-menu" role="listbox" aria-label="插入内容">
+  <div ref="menu" class="slash-menu" role="listbox" :aria-label="t('editor.slash.aria')">
     <div class="slash-heading">
-      <span>插入内容</span>
-      <kbd>↑↓ 选择 · Enter 插入</kbd>
+      <span>{{ t('editor.slash.aria') }}</span>
+      <kbd>{{ t('editor.slash.hint') }}</kbd>
     </div>
     <div v-if="items.length" class="slash-items">
       <button
@@ -117,10 +121,10 @@ function selectItem(item: SlashMenuItem): void {
         @click="selectItem(item)"
       >
         <span class="slash-icon"><AppIcon :name="item.icon" :size="17" /></span>
-        <span class="slash-copy"><strong>{{ item.label }}</strong><small>{{ item.description }}</small></span>
+        <span class="slash-copy"><strong>{{ slashItemLabel(item) }}</strong><small>{{ slashItemDescription(item) }}</small></span>
       </button>
     </div>
-    <div v-else class="slash-empty">没有匹配的内容</div>
+    <div v-else class="slash-empty">{{ t('editor.slash.noResults') }}</div>
   </div>
 </template>
 

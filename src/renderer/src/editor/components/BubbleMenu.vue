@@ -6,11 +6,13 @@ import AppIcon from '../../components/AppIcon.vue'
 import { isEditorCommandActive, runEditorCommand, setEditorHighlight, setEditorTextColor, type EditorCommand } from '../core/editorCommands'
 import { HIGHLIGHT_COLORS, TEXT_COLORS } from '../core/toolbarConfig'
 import { shouldShowBubbleMenu } from '../core/overlayModel'
+import { useI18n } from '../../i18n/useI18n'
 
 const props = defineProps<{
   editor: Editor
   composing?: boolean
 }>()
+const { t } = useI18n()
 
 const bubble = ref<HTMLElement | null>(null)
 const revision = ref(0)
@@ -32,12 +34,12 @@ const linkActive = computed(() => {
   return props.editor.isActive('link')
 })
 
-const markActions: ReadonlyArray<{ command: EditorCommand; label: string; icon: string }> = [
-  { command: 'bold', label: '粗体', icon: 'bold' },
-  { command: 'italic', label: '斜体', icon: 'italic' },
-  { command: 'underline', label: '下划线', icon: 'underline' },
-  { command: 'strike', label: '删除线', icon: 'strike' },
-  { command: 'code', label: '行内代码', icon: 'code' },
+const markActions: ReadonlyArray<{ command: EditorCommand; labelKey: string; icon: string }> = [
+  { command: 'bold', labelKey: 'editor.bold', icon: 'bold' },
+  { command: 'italic', labelKey: 'editor.italic', icon: 'italic' },
+  { command: 'underline', labelKey: 'editor.underline', icon: 'underline' },
+  { command: 'strike', labelKey: 'editor.strike', icon: 'strike' },
+  { command: 'code', labelKey: 'editor.code', icon: 'code' },
 ]
 
 function handleEditorEvent(): void {
@@ -153,46 +155,46 @@ function applyLink(): void {
 </script>
 
 <template>
-  <div v-if="visible" ref="bubble" class="bubble-menu" role="toolbar" aria-label="选区格式">
+  <div v-if="visible" ref="bubble" class="bubble-menu" role="toolbar" :aria-label="t('editor.bubble.aria')">
     <button
       v-for="action in markActions"
       :key="action.command"
       type="button"
       :class="{ active: isActive(action.command) }"
-      :aria-label="action.label"
-      :title="action.label"
+      :aria-label="t(action.labelKey)"
+      :title="t(action.labelKey)"
       @mousedown.prevent
       @click="applyMark(action.command)"
     >
       <AppIcon :name="action.icon" :size="15" />
     </button>
     <span class="bubble-divider" />
-    <button type="button" aria-label="文字颜色" title="文字颜色" :class="{ active: panel === 'color' }" @mousedown.prevent @click="togglePanel('color')">
+    <button type="button" :aria-label="t('editor.toolbar.color')" :title="t('editor.toolbar.color')" :class="{ active: panel === 'color' }" @mousedown.prevent @click="togglePanel('color')">
       <AppIcon name="palette" :size="15" />
     </button>
-    <button type="button" aria-label="背景高亮" title="背景高亮" :class="{ active: isActive('highlight') }" @mousedown.prevent @click="togglePanel('highlight')">
+    <button type="button" :aria-label="t('editor.toolbar.highlight')" :title="t('editor.toolbar.highlight')" :class="{ active: isActive('highlight') }" @mousedown.prevent @click="togglePanel('highlight')">
       <span class="highlight-dot" />
     </button>
-    <button type="button" aria-label="链接" title="链接" :class="{ active: linkActive }" @mousedown.prevent @click="togglePanel('link')">
+    <button type="button" :aria-label="t('editor.link')" :title="t('editor.link')" :class="{ active: linkActive }" @mousedown.prevent @click="togglePanel('link')">
       <AppIcon name="link" :size="15" />
     </button>
 
     <div v-if="panel === 'color' || panel === 'highlight'" class="bubble-palette" @mousedown.prevent>
       <button
         v-for="option in panel === 'color' ? TEXT_COLORS : HIGHLIGHT_COLORS"
-        :key="option.label"
+        :key="option.labelKey"
         type="button"
         class="bubble-swatch"
         :class="{ 'swatch-default': !option.value }"
         :style="option.value ? { '--swatch': option.value } : undefined"
-        :title="option.label"
+        :title="t(option.labelKey)"
         @click="panel === 'color' ? applyColor(option.value) : applyHighlight(option.value)"
       />
     </div>
 
     <div v-if="panel === 'link'" class="bubble-link" @mousedown.prevent>
-      <input v-model="linkValue" class="bubble-link-input" type="url" placeholder="粘贴链接" @keydown.enter.prevent="applyLink" @keydown.esc.prevent="panel = ''" />
-      <button type="button" @click="applyLink">应用</button>
+      <input v-model="linkValue" class="bubble-link-input" type="url" :placeholder="t('editor.toolbar.linkPlaceholder')" @keydown.enter.prevent="applyLink" @keydown.esc.prevent="panel = ''" />
+      <button type="button" @click="applyLink">{{ t('editor.toolbar.linkApply') }}</button>
     </div>
   </div>
 </template>

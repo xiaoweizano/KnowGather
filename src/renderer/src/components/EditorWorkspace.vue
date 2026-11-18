@@ -5,28 +5,36 @@ import type { DocumentRecord, TiptapDocument } from '../../../shared/document'
 import type { AttachmentReference } from '../../../shared/document'
 import AppIcon from './AppIcon.vue'
 import DocumentHeader from './DocumentHeader.vue'
-import EditorToolbar from '../editor/components/EditorToolbar.vue'
-import EditorCanvas from '../editor/components/EditorCanvas.vue'
-import EditorStatusBar from './EditorStatusBar.vue'
+import EditorPane from './EditorPane.vue'
 import ShortcutsHelp from './ShortcutsHelp.vue'
 import { useDocumentStore } from '../stores/document'
 import { useUiStore } from '../stores/ui'
 import { getShizhiApi } from '../services/api'
+import { plainTextPreview } from '../editor/core/markdown'
+import { formatKnowledgeUpdatedAt } from '../app/knowledgeView'
+import { useI18n } from '../i18n/useI18n'
 
 const props = defineProps<{ document: DocumentRecord }>()
 const documentStore = useDocumentStore()
 const ui = useUiStore()
+const { t, locale } = useI18n()
 const api = getShizhiApi()
 const editor = shallowRef<Editor | null>(null)
 const selectionActive = ref(false)
 const toast = ref('')
-const settingsOpen = ref(false)
-const fontMenuOpen = ref(false)
 const shortcutsOpen = ref(false)
 let toastTimer: ReturnType<typeof setTimeout> | null = null
 
 const isError = computed(() => documentStore.saveState.phase === 'error')
-const errorMessage = computed(() => documentStore.saveState.error ?? '保存失败，请检查本地存储后重试')
+const errorMessage = computed(() => documentStore.saveState.error ?? t('document.saveError.fallback'))
+const saveStatusMessage = computed(() => {
+  const state = documentStore.saveState
+  if (state.phase === 'saving') return t('document.save.saving')
+  if (state.phase === 'dirty') return t('document.save.dirty')
+  if (state.phase === 'error') return t('document.save.error', { message: state.error ?? t('common.pleaseRetry') })
+  if (state.lastSavedAt) return t('document.save.saved', { time: formatKnowledgeUpdatedAt(state.lastSavedAt, new Date(), locale.value) })
+  return t('document.save.idle')
+})
 
 function handleEditorReady(instance: Editor | null): void {
   editor.value = instance
@@ -41,13 +49,44 @@ function handleTitle(title: string): void {
   documentStore.updateTitle(title)
 }
 
+function handleToggleFavorite(): void {
+  const favorite = documentStore.toggleFavorite()
+  showToast(favorite ? t('document.toast.favorited') : t('document.toast.unfavorited'))
+}
+
+function handleAddTag(tag: string): void {
+  showToast(documentStore.addTag(tag) ? t('document.toast.tagAdded', { tag }) : t('document.toast.tagExists'))
+}
+
+function handleRemoveTag(tag: string): void {
+  documentStore.removeTag(tag)
+  showToast(t('document.toast.tagRemoved', { tag }))
+}
+
+async function handleCreateDocument(): Promise<void> {
+  const created = await documentStore.createDocument({ categoryId: props.document.categoryId })
+  showToast(created ? t('document.toast.created') : (documentStore.error ?? t('common.loading')))
+}
+
+async function handleDeleteDocument(): Promise<void> {
+  const ok = await documentStore.deleteDocument(props.document.id)
+  showToast(ok ? t('document.toast.deleted') : (documentStore.error ?? t('common.saveFailed')))
+}
+
 async function shareDocument(): Promise<void> {
-  const title = documentStore.current?.title ?? '未命名文档'
+  const document = documentStore.current
+  if (!document) return
+  const preview = plainTextPreview(document.content)
+  const payload = [
+    t('document.shareTitle', { title: document.title }),
+    preview ? `\n${preview}` : '',
+    `\n${t('document.shareEditedAt', { time: formatKnowledgeUpdatedAt(document.updatedAt, new Date(), locale.value) })}`,
+  ].join('')
   try {
-    await navigator.clipboard.writeText(`拾知文档：${title}`)
-    showToast('文档信息已复制')
+    await navigator.clipboard.writeText(payload)
+    showToast(t('document.toast.shared'))
   } catch {
-    showToast('分享信息已准备好')
+    showToast(t('document.toast.shareFailed'))
   }
 }
 
@@ -57,9 +96,19 @@ function showToast(message: string): void {
   toastTimer = setTimeout(() => { toast.value = '' }, 2200)
 }
 
+function focusKnowledgeSearch(): void {
+  const input = document.querySelector<HTMLInputElement>('.search-box input')
+  if (!input) {
+    showToast(t('document.toast.searchMissing'))
+    return
+  }
+  input.focus()
+  input.select()
+}
+
 async function retrySave(): Promise<void> {
   const ok = await documentStore.retrySave()
-  showToast(ok ? '已重新保存' : '仍然无法保存，请稍后重试')
+  showToast(ok ? t('document.toast.retried') : t('document.toast.retryFailed'))
 }
 
 async function pickImages(): Promise<void> {
@@ -67,7 +116,7 @@ async function pickImages(): Promise<void> {
     const references = await api.attachments.pickImages()
     insertImages(references)
   } catch {
-    showToast('无法读取所选图片')
+    showToast(t('document.toast.imageFailed'))
   }
 }
 
@@ -85,7 +134,7 @@ function insertImages(references: AttachmentReference[]): void {
       },
     }).run()
   }
-  showToast(references.length === 1 ? '图片已插入' : `已插入 ${references.length} 张图片`)
+  showToast(references.length === 1 ? t('document.toast.imageInserted') : t('document.toast.imagesInserted', { count: references.length }))
 }
 
 async function pickAttachments(): Promise<void> {
@@ -93,7 +142,7 @@ async function pickAttachments(): Promise<void> {
     const references = await api.attachments.pickFiles()
     insertAttachments(references)
   } catch {
-    showToast('无法读取所选附件')
+    showToast(t('document.toast.attachmentFailed'))
   }
 }
 
@@ -105,14 +154,14 @@ function insertAttachments(references: AttachmentReference[]): void {
       attrs: { ...reference },
     }).run()
   }
-  showToast(references.length === 1 ? '附件已添加' : `已添加 ${references.length} 个附件`)
+  showToast(references.length === 1 ? t('document.toast.attachmentInserted') : t('document.toast.attachmentsInserted', { count: references.length }))
 }
 
 function insertTable(): void {
   const currentEditor = editor.value
   if (!currentEditor) return
   currentEditor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()
-  showToast('已插入 3 × 3 表格')
+  showToast(t('document.toast.tableInserted'))
 }
 
 onBeforeUnmount(() => {
@@ -133,62 +182,64 @@ onBeforeUnmount(() => document.removeEventListener('keydown', handleWorkspaceSho
 <template>
   <section class="editor-workspace">
     <div class="utility-bar">
-      <button class="workspace-brand" type="button" title="拾知">
-        <span class="mini-logo">拾</span>
+      <button class="workspace-brand" type="button" :title="t('document.workspaceHome')" @click="focusKnowledgeSearch">
+        <span class="mini-logo">{{ t('document.brandLetter') }}</span>
       </button>
       <div class="utility-spacer" />
-      <button type="button" class="utility-button" title="搜索"><AppIcon name="search" :size="20" /></button>
-      <button type="button" class="utility-button notification-button" title="通知">
-        <AppIcon name="bell" :size="20" />
-        <span class="notification-dot" />
+      <button type="button" class="utility-button" :title="t('document.searchTitle')" :aria-label="t('document.searchAria')" @click="focusKnowledgeSearch">
+        <AppIcon name="search" :size="20" />
       </button>
-      <button type="button" class="avatar-button" title="个人账户">知</button>
+      <button
+        type="button"
+        class="utility-button notification-button"
+        :title="t('common.saved')"
+        :aria-label="t('document.toast.saveStatus')"
+        @click="showToast(saveStatusMessage)"
+      >
+        <AppIcon :name="isError ? 'info' : documentStore.saveState.phase === 'saved' ? 'check' : 'clock'" :size="20" />
+        <span v-if="isError" class="notification-dot" />
+      </button>
+      <button type="button" class="avatar-button" :title="t('document.toast.currentDocAria')" :aria-label="t('document.toast.currentDocAria')" @click="showToast(t('document.toast.currentDocument', { title: props.document.title }))">{{ t('document.avatarLetter') }}</button>
     </div>
 
     <DocumentHeader
       :document="props.document"
       @update-title="handleTitle"
+      @toggle-favorite="handleToggleFavorite"
       @share="shareDocument"
+      @add-tag="handleAddTag"
+      @remove-tag="handleRemoveTag"
+      @create-document="handleCreateDocument"
+      @delete-document="handleDeleteDocument"
     />
-
-    <div class="toolbar-wrap">
-      <EditorToolbar
-        :editor="editor"
-        @request-image="pickImages"
-        @request-attachment="pickAttachments"
-        @insert-table="insertTable"
-      />
-      <div class="toolbar-scrim" />
-    </div>
 
     <div v-if="isError" class="save-error-banner" role="alert">
       <span class="error-icon"><AppIcon name="info" :size="17" /></span>
-      <span class="error-copy"><strong>自动保存失败</strong><small>{{ errorMessage }}</small></span>
-      <button type="button" @click="retrySave"><AppIcon name="retry" :size="14" /> 重试</button>
+      <span class="error-copy"><strong>{{ t('document.saveError.title') }}</strong><small>{{ errorMessage }}</small></span>
+      <button type="button" @click="retrySave"><AppIcon name="retry" :size="14" /> {{ t('common.retry') }}</button>
     </div>
 
-    <EditorCanvas
+    <EditorPane
       :content="props.document.content"
       :document-id="props.document.id"
       @ready="handleEditorReady"
       @change="handleChange"
       @selection-change="selectionActive = $event"
+      @notify="showToast"
       @request-image="pickImages"
       @request-attachment="pickAttachments"
       @insert-table="insertTable"
     />
-
-    <EditorStatusBar />
 
     <Transition name="toast">
       <div v-if="toast" class="workspace-toast" role="status">{{ toast }}</div>
     </Transition>
 
     <div class="workspace-utility-actions">
-      <button type="button" :title="ui.theme === 'light' ? '切换深色主题' : '切换浅色主题'" @click="ui.toggleTheme()">
+      <button type="button" :title="ui.theme === 'light' ? t('settings.theme.dark') : t('settings.theme.light')" @click="ui.toggleTheme()">
         <AppIcon :name="ui.theme === 'light' ? 'moon' : 'sun'" :size="16" />
       </button>
-      <button type="button" title="键盘快捷键" @click="shortcutsOpen = true">
+      <button type="button" :title="t('shortcuts.title')" @click="shortcutsOpen = true">
         <AppIcon name="keyboard" :size="16" />
       </button>
     </div>
@@ -215,7 +266,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', handleWorkspaceSho
   align-items: center;
   gap: 8px;
   padding: 0 21px;
-  border-bottom: 1px solid #f2eff6;
+  border-bottom: 1px solid var(--divider-soft);
   background: var(--panel-strong);
 }
 
@@ -234,10 +285,10 @@ onBeforeUnmount(() => document.removeEventListener('keydown', handleWorkspaceSho
   width: 27px;
   height: 27px;
   place-items: center;
-  border: 1px solid #e8e2ff;
+  border: 1px solid var(--accent-soft-border);
   border-radius: 8px;
-  background: #f3efff;
-  color: #7561df;
+  background: var(--accent-faint);
+  color: var(--accent);
   font-size: 13px;
   font-weight: 750;
 }
@@ -256,7 +307,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', handleWorkspaceSho
   border: 0;
   border-radius: 9px;
   background: transparent;
-  color: #625d6d;
+  color: var(--text-secondary);
   cursor: pointer;
 }
 
@@ -272,14 +323,14 @@ onBeforeUnmount(() => document.removeEventListener('keydown', handleWorkspaceSho
   height: 5px;
   border: 1px solid white;
   border-radius: 50%;
-  background: #f27b76;
+  background: var(--danger);
 }
 
 .avatar-button {
   margin-left: 2px;
   border-radius: 50%;
-  background: linear-gradient(145deg, #dfd6ef, #b7a8d0);
-  color: #4c405e;
+  background: linear-gradient(145deg, var(--accent-soft), var(--accent));
+  color: var(--text-row);
   font-size: 12px;
   font-weight: 700;
 }
@@ -307,10 +358,10 @@ onBeforeUnmount(() => document.removeEventListener('keydown', handleWorkspaceSho
   gap: 9px;
   margin: 8px 24px 0;
   padding: 8px 10px;
-  border: 1px solid #f3dadd;
+  border: 1px solid var(--state-danger-border);
   border-radius: 9px;
-  background: #fff5f6;
-  color: #9e4754;
+  background: var(--state-danger-bg);
+  color: var(--state-danger-fg);
   font-size: 10px;
 }
 
@@ -321,7 +372,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', handleWorkspaceSho
   flex: 0 0 auto;
   place-items: center;
   border-radius: 7px;
-  background: #ffe7ea;
+  background: var(--state-danger-bg);
 }
 
 .error-copy {
@@ -335,7 +386,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', handleWorkspaceSho
 }
 
 .error-copy small {
-  color: #b4747d;
+  color: var(--state-danger-fg);
   font-size: 9.5px;
 }
 
@@ -346,10 +397,10 @@ onBeforeUnmount(() => document.removeEventListener('keydown', handleWorkspaceSho
   gap: 4px;
   margin-left: auto;
   padding: 0 9px;
-  border: 1px solid #e8bcc2;
+  border: 1px solid var(--state-danger-border);
   border-radius: 6px;
-  background: white;
-  color: #a14956;
+  background: var(--panel-strong);
+  color: var(--state-danger-fg);
   cursor: pointer;
   font-size: 9.5px;
 }

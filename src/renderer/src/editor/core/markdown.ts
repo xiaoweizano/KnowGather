@@ -1,4 +1,5 @@
 import type { AttachmentReference, TiptapDocument, TiptapMark, TiptapNode } from '@shared/document'
+import { translate } from '../../i18n'
 
 const ALIGNMENT_ROW = ['---', '---', '---']
 
@@ -9,6 +10,35 @@ export function documentToMarkdown(document: TiptapDocument): string {
     .replace(/\n{3,}/g, '\n\n')
     .trimEnd()
     .concat('\n')
+}
+
+/**
+ * Flattens a document to a single line of readable text, used for clipboard
+ * sharing and document previews. Block boundaries become spaces.
+ */
+export function plainTextPreview(document: TiptapDocument, limit = 400): string {
+  const parts: string[] = []
+  const visit = (node: TiptapNode): void => {
+    if (typeof node.text === 'string') {
+      parts.push(node.text)
+      return
+    }
+    if (node.type === 'image') {
+      parts.push(` ${translate('editor.preview.image', { alt: String(node.attrs?.alt ?? translate('common.unnamed')) })}`)
+      return
+    }
+    if (node.type === 'attachment') {
+      parts.push(` ${translate('editor.preview.attachment', { name: String(node.attrs?.name ?? translate('common.unnamed')) })}`)
+      return
+    }
+    node.content?.forEach(visit)
+    if (node.type === 'paragraph' || node.type === 'heading' || node.type === 'listItem' || node.type === 'blockquote') {
+      parts.push(' ')
+    }
+  }
+  document.content.forEach(visit)
+  const text = parts.join('').replace(/\s+/g, ' ').trim()
+  return text.length > limit ? `${text.slice(0, limit)}…` : text
 }
 
 export function normalizeAttachmentReference(value: unknown): AttachmentReference | null {
@@ -65,8 +95,10 @@ function renderBlock(node: TiptapNode, depth = 0): string {
       return src ? `![${escapeMarkdown(alt)}](${src})\n\n` : ''
     }
     case 'attachment': {
-      const name = String(node.attrs?.name ?? '附件')
+      const name = String(node.attrs?.name ?? translate('editor.attachment'))
       const url = String(node.attrs?.url ?? '')
+      // `[附件：…]` is part of the exported Markdown format, not UI chrome, so
+      // it stays fixed regardless of the interface language.
       return url ? `[附件：${escapeMarkdown(name)}](${url})\n\n` : escapeMarkdown(name) + '\n\n'
     }
     case 'table':

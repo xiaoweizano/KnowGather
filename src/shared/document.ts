@@ -21,6 +21,7 @@ export interface DocumentRecord {
   title: string
   categoryId: string | null
   tags: string[]
+  favorite: boolean
   content: TiptapDocument
   revision: number
   version: number
@@ -34,6 +35,7 @@ export interface DocumentSavePayload {
   title: string
   categoryId: string | null
   tags: string[]
+  favorite: boolean
   content: TiptapDocument
   revision: number
   version: number
@@ -109,6 +111,7 @@ export function createDocumentRecord(input: {
   categoryId?: string | null
   content: TiptapDocument
   tags?: string[]
+  favorite?: boolean
   now?: string
 }): DocumentRecord {
   const now = input.now ?? new Date().toISOString()
@@ -117,6 +120,7 @@ export function createDocumentRecord(input: {
     title: input.title.trim() || '无标题文档',
     categoryId: input.categoryId ?? null,
     tags: input.tags ? [...input.tags] : [],
+    favorite: input.favorite ?? false,
     content: normalizeDocumentJson(input.content),
     revision: 0,
     version: 1,

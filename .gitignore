@@ -26,3 +26,7 @@ audit-cdp-*.json
 audit-*.png
 audit-*.json
 audit-*.txt
+
+# IDE / local AI tracking artifacts
+.idea/
+.ai-code-tracking.json

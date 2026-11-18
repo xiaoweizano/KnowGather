@@ -17,6 +17,7 @@ const emit = defineEmits<{
   requestImage: []
   requestAttachment: []
   insertTable: []
+  settingsChange: [settings: { foldHeadings: boolean; lineNumbers: boolean }]
 }>()
 
 const ui = useUiStore()
@@ -48,7 +49,7 @@ defineExpose({
     :style="{ '--editor-zoom': String(ui.zoom / 100) }"
     @click="focusEditor"
   >
-    <div class="editor-paper">
+    <div class="editor-paper" :class="{ 'has-line-numbers': ui.showLineNumbers }">
       <DocumentEditor
         ref="editorComponent"
         :content="props.content"
@@ -59,6 +60,7 @@ defineExpose({
         @request-image="emit('requestImage')"
         @request-attachment="emit('requestAttachment')"
         @insert-table="emit('insertTable')"
+        @settings-change="emit('settingsChange', $event)"
       />
     </div>
   </main>
@@ -71,44 +73,47 @@ defineExpose({
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
-  background:
-    radial-gradient(circle at 50% -15%, rgba(222, 216, 255, 0.22), transparent 38%),
-    var(--panel-strong);
+  /* A flat surface: the old radial tint read as a faint frame around the page. */
+  background: var(--panel-strong);
   scrollbar-width: thin;
-  scrollbar-color: #ddd8ea transparent;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
   overscroll-behavior: contain;
 }
 
 .editor-paper {
-  width: min(820px, calc(100% - 96px));
+  width: min(960px, calc(100% - 48px));
   min-height: 100%;
   margin: 0 auto;
-  padding: 30px 0 180px;
+  padding: 26px 0 160px;
   zoom: var(--editor-zoom);
 }
 
+.editor-paper.has-line-numbers {
+  padding-left: 44px;
+}
+
 .content-wide .editor-paper {
-  width: min(1040px, calc(100% - 96px));
+  width: min(1200px, calc(100% - 48px));
 }
 
 .is-zoomed .editor-paper {
-  width: min(calc(820px / var(--editor-zoom)), calc(100% - calc(96px / var(--editor-zoom))));
+  width: min(calc(960px / var(--editor-zoom)), calc(100% - calc(48px / var(--editor-zoom))));
 }
 
 .content-wide.is-zoomed .editor-paper {
-  width: min(calc(1040px / var(--editor-zoom)), calc(100% - calc(96px / var(--editor-zoom))));
+  width: min(calc(1200px / var(--editor-zoom)), calc(100% - calc(48px / var(--editor-zoom))));
 }
 
 @media (max-width: 1100px) {
   .editor-paper {
-    width: calc(100% - 72px);
+    width: calc(100% - 32px);
   }
 }
 
 @media (max-width: 760px) {
   .editor-paper {
-    width: calc(100% - 36px);
-    padding-top: 22px;
+    width: calc(100% - 24px);
+    padding-top: 20px;
   }
 }
 </style>

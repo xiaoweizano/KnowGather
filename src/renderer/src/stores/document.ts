@@ -10,9 +10,12 @@ import {
   type JournalRecord,
   type JournalSavePayload,
   type TiptapDocument,
+  type TiptapNode,
 } from '../../../shared/document'
 import { getShizhiApi } from '../services/api'
 import { AutoSaveController, type AutoSaveState } from '../services/autosave'
+import { dataUrlToBytes, htmlToDocument, isDocumentEmpty } from '../services/importService'
+import { translate } from '../i18n'
 
 export interface CreateDocumentInput {
   title?: string
@@ -24,6 +27,24 @@ export interface CreateJournalInput {
   title?: string
   categoryId?: string | null
   content?: TiptapDocument
+}
+
+export interface ImportIssue {
+  sourceLabel: string
+  /** Main-process fallback text, used when no translatable code is present. */
+  reason: string
+  /** Stable code the UI translates (`import.<code>`). */
+  code?: string
+  params?: Record<string, string | number>
+}
+
+export interface ImportOutcome {
+  created: number
+  failed: ImportIssue[]
+  skipped: ImportIssue[]
+  /** Documents that parsed but produced no content and were not imported. */
+  empty: string[]
+  canceled: boolean
 }
 
 const idleSaveState = (): AutoSaveState => ({
@@ -41,11 +62,14 @@ export const useDocumentStore = defineStore('document', () => {
   const documents = ref<DocumentRecord[]>([])
   const categories = ref<CategoryRecord[]>([])
   const journals = ref<JournalRecord[]>([])
+  const currentJournal = ref<JournalRecord | null>(null)
   const loading = ref(true)
   const error = ref<string | null>(null)
   const saveState = ref<AutoSaveState>(idleSaveState())
+  const journalSaveState = ref<AutoSaveState>(idleSaveState())
   const editorInstanceId = ref<string | null>(null)
-  const saveController = shallowRef<AutoSaveController | null>(null)
+  const saveController = shallowRef<AutoSaveController<DocumentSavePayload> | null>(null)
+  const journalSaveController = shallowRef<AutoSaveController<JournalRecord> | null>(null)
 
   const isDirty = computed(() => saveState.value.phase !== 'saved' && saveState.value.phase !== 'idle')
   const wordCount = computed(() => countDocumentCharacters(current.value?.content))
@@ -57,12 +81,32 @@ export const useDocumentStore = defineStore('document', () => {
       save: (payload) => api.documents.save(payload),
       onStateChange: (state) => {
         saveState.value = state
-        void api.window.setCloseGuard(state.phase === 'dirty' || state.phase === 'saving' || state.phase === 'error')
+        syncCloseGuard()
         if (state.phase === 'saved' && state.lastSavedAt) {
           syncSavedRecord(state.savedRevision, state.savedVersion, state.lastSavedAt)
         }
       },
     })
+  }
+
+  function initJournalAutoSave(): void {
+    if (journalSaveController.value) return
+    journalSaveController.value = new AutoSaveController({
+      delay: 850,
+      save: (payload) => api.journals.save(toJournalSavePayloadForWrite(payload)),
+      onStateChange: (state) => {
+        journalSaveState.value = state
+        syncCloseGuard()
+        if (state.phase === 'saved' && state.lastSavedAt) {
+          syncSavedJournal(state.savedRevision, state.savedVersion, state.lastSavedAt)
+        }
+      },
+    })
+  }
+
+  function syncCloseGuard(): void {
+    const phases = [saveState.value.phase, journalSaveState.value.phase]
+    void api.window.setCloseGuard(phases.some((phase) => phase === 'dirty' || phase === 'saving' || phase === 'error'))
   }
 
   async function initialize(): Promise<void> {
@@ -149,31 +193,146 @@ export const useDocumentStore = defineStore('document', () => {
   }
 
   async function moveDocument(id: string, categoryId: string | null): Promise<boolean> {
-    const target = id === current.value?.id ? current.value : documents.value.find((document) => document.id === id)
+    return patchDocument(id, { categoryId }, '移动文档失败')
+  }
+
+  /** Renames any document, not just the open one. */
+  async function renameDocument(id: string, title: string): Promise<boolean> {
+    const next = title.trim()
+    if (!next) return false
+    return patchDocument(id, { title: next }, '重命名文档失败')
+  }
+
+  /** Favorites any document, not just the open one. */
+  async function setDocumentFavorite(id: string, favorite: boolean): Promise<boolean> {
+    return patchDocument(id, { favorite }, '收藏文档失败')
+  }
+
+  /**
+   * Saves a partial change to one document.
+   *
+   * Non-current documents are re-read first: the repository ignores a save whose
+   * revision is older than what is on disk and returns the stored receipt, so
+   * patching a stale list entry would silently do nothing. The receipt revision
+   * is then checked against the expected value so the UI never reports success
+   * for a write that was skipped.
+   */
+  async function patchDocument(
+    id: string,
+    patch: Partial<Pick<DocumentRecord, 'title' | 'categoryId' | 'favorite'>>,
+    errorLabel: string,
+  ): Promise<boolean> {
+    const isCurrent = id === current.value?.id
+    if (isCurrent && !(await saveNow())) return false
+
+    let target: DocumentRecord | undefined | null
+    if (isCurrent) {
+      target = current.value
+    } else {
+      // Prefer the list entry so a missing id is reported immediately, then
+      // confirm the write actually landed by comparing the receipt revision.
+      target = documents.value.find((document) => document.id === id)
+      if (!target) {
+        try {
+          target = await api.documents.get(id)
+        } catch (cause) {
+          error.value = message(cause, errorLabel)
+          return false
+        }
+      }
+    }
     if (!target) {
       error.value = '文档不存在或已被删除'
       return false
     }
-    if (id === current.value?.id && !(await saveNow())) return false
+
     const updated: DocumentRecord = {
       ...target,
-      categoryId,
+      ...patch,
       revision: target.revision + 1,
       updatedAt: new Date().toISOString(),
     }
     try {
       const receipt = await api.documents.save(toSavePayload(updated))
+      if (receipt.revision !== updated.revision) {
+        error.value = '文档已在别处更新，请重试'
+        return false
+      }
       const saved = { ...updated, revision: receipt.revision, version: receipt.version, updatedAt: receipt.savedAt }
-      const wasCurrent = current.value?.id === id
       documents.value = sortByUpdatedAt(documents.value.map((document) => document.id === id ? saved : document))
-      if (wasCurrent) {
+      if (isCurrent) {
         current.value = saved
         saveState.value = savedStateFor(receipt.revision, receipt.version, receipt.savedAt)
       }
       error.value = null
       return true
     } catch (cause) {
-      error.value = message(cause, '移动文档失败')
+      error.value = message(cause, errorLabel)
+      return false
+    }
+  }
+
+  /** Moves a journal entry into another category. */
+  async function moveJournal(id: string, categoryId: string | null): Promise<boolean> {
+    return patchJournal(id, { categoryId }, '移动日志失败')
+  }
+
+  /** Renames a journal entry that is not necessarily open. */
+  async function renameJournal(id: string, title: string): Promise<boolean> {
+    const next = title.trim()
+    if (!next) return false
+    return patchJournal(id, { title: next }, '重命名日志失败')
+  }
+
+  async function patchJournal(
+    id: string,
+    patch: Partial<Pick<JournalRecord, 'title' | 'categoryId'>>,
+    errorLabel: string,
+  ): Promise<boolean> {
+    const isCurrent = id === currentJournal.value?.id
+    if (isCurrent && !(await saveJournalNow())) return false
+
+    let target: JournalRecord | undefined | null
+    if (isCurrent) {
+      target = currentJournal.value
+    } else {
+      target = journals.value.find((journal) => journal.id === id)
+      if (!target) {
+        try {
+          target = await api.journals.get(id)
+        } catch (cause) {
+          error.value = message(cause, errorLabel)
+          return false
+        }
+      }
+    }
+    if (!target) {
+      error.value = '日志不存在或已被删除'
+      return false
+    }
+
+    const updated: JournalRecord = {
+      ...target,
+      ...patch,
+      revision: target.revision + 1,
+      updatedAt: new Date().toISOString(),
+    }
+    try {
+      const receipt = await api.journals.save(toJournalSavePayload(updated))
+      if (receipt.revision !== updated.revision) {
+        error.value = '日志已在别处更新，请重试'
+        return false
+      }
+      const saved = { ...updated, revision: receipt.revision, version: receipt.version, updatedAt: receipt.savedAt }
+      journals.value = sortByUpdatedAt(journals.value.map((journal) => journal.id === id ? saved : journal))
+      if (isCurrent) {
+        currentJournal.value = saved
+        journalSaveState.value = savedStateFor(receipt.revision, receipt.version, receipt.savedAt)
+      }
+      error.value = null
+      return true
+    } catch (cause) {
+      error.value = message(cause, errorLabel)
       return false
     }
   }
@@ -243,7 +402,7 @@ export const useDocumentStore = defineStore('document', () => {
       deletedAt: null,
     }
     try {
-      const receipt = await api.journals.save(toJournalSavePayload(record))
+      const receipt = await api.journals.save(record)
       const saved = { ...record, revision: receipt.revision, version: receipt.version, updatedAt: receipt.savedAt }
       journals.value = sortByUpdatedAt([...journals.value, saved])
       error.value = null
@@ -254,16 +413,228 @@ export const useDocumentStore = defineStore('document', () => {
     }
   }
 
+  async function selectJournal(id: string): Promise<boolean> {
+    if (currentJournal.value?.id === id) return true
+    if (!(await saveNow())) return false
+    if (!(await saveJournalNow())) return false
+    try {
+      const stored = await api.journals.get(id)
+      if (!stored) {
+        error.value = '日志不存在或已被删除'
+        return false
+      }
+      currentJournal.value = stored
+      journalSaveState.value = savedStateFor(stored.revision, stored.version, stored.updatedAt)
+      error.value = null
+      return true
+    } catch (cause) {
+      error.value = message(cause, '打开日志失败')
+      return false
+    }
+  }
+
+  function closeJournal(): void {
+    currentJournal.value = null
+    journalSaveState.value = idleSaveState()
+    journalSaveController.value?.dispose()
+    journalSaveController.value = null
+  }
+
+  function updateJournalTitle(title: string): void {
+    if (!currentJournal.value || currentJournal.value.title === title) return
+    currentJournal.value = {
+      ...currentJournal.value,
+      title,
+      revision: currentJournal.value.revision + 1,
+      updatedAt: new Date().toISOString(),
+    }
+    scheduleJournalSave()
+  }
+
+  function updateJournalContent(content: TiptapDocument): void {
+    if (!currentJournal.value) return
+    currentJournal.value = {
+      ...currentJournal.value,
+      content,
+      revision: currentJournal.value.revision + 1,
+      updatedAt: new Date().toISOString(),
+    }
+    scheduleJournalSave()
+  }
+
+  function scheduleJournalSave(): void {
+    if (!currentJournal.value) return
+    initJournalAutoSave()
+    journalSaveController.value?.schedule(currentJournal.value)
+  }
+
+  async function saveJournalNow(): Promise<boolean> {
+    initJournalAutoSave()
+    return (await journalSaveController.value?.flush()) ?? true
+  }
+
+  function syncSavedJournal(savedRevision: number, savedVersion: number, savedAt: string): void {
+    if (!currentJournal.value || journalSaveState.value.savedRevision !== savedRevision) return
+    const saved = { ...currentJournal.value, revision: savedRevision, version: savedVersion, updatedAt: savedAt }
+    currentJournal.value = saved
+    journals.value = sortByUpdatedAt(journals.value.map((journal) => journal.id === saved.id ? saved : journal))
+  }
+
   async function deleteJournal(id: string): Promise<boolean> {
     try {
       await api.journals.remove(id)
       journals.value = journals.value.filter((journal) => journal.id !== id)
+      if (currentJournal.value?.id === id) closeJournal()
       error.value = null
       return true
     } catch (cause) {
       error.value = message(cause, '删除日志失败')
       return false
     }
+  }
+
+  /**
+   * Imports files through the preload bridge and writes them as documents.
+   *
+   * `merge` appends everything into the current document; otherwise each file
+   * becomes its own document. Failures are collected per file so one bad file
+   * does not abort the batch.
+   */
+  async function importDocuments(options: {
+    mode: 'files' | 'folder' | 'archive'
+    categoryId: string | null
+    merge: boolean
+  }): Promise<ImportOutcome> {
+    const outcome: ImportOutcome = { created: 0, failed: [], skipped: [], empty: [], canceled: false }
+
+    let preview
+    try {
+      preview = await api.imports.pick({ mode: options.mode })
+    } catch (cause) {
+      outcome.failed.push({ sourceLabel: translate('import.source.import'), reason: message(cause, '无法读取所选内容'), code: 'readFailed' })
+      error.value = message(cause, '导入失败')
+      return outcome
+    }
+
+    if (preview.canceled) {
+      outcome.canceled = true
+      return outcome
+    }
+
+    outcome.failed.push(...preview.failures)
+    outcome.skipped.push(...preview.skipped)
+
+    const prepared: Array<{ title: string; content: TiptapDocument; sourceLabel: string }> = []
+    for (const document of preview.documents) {
+      try {
+        const { document: content, embeddedImages } = htmlToDocument(document.html)
+        const hydrated = await hydrateEmbeddedImages(content, embeddedImages)
+        if (isDocumentEmpty(hydrated)) {
+          outcome.empty.push(document.sourceLabel)
+          continue
+        }
+        prepared.push({ title: document.title, content: hydrated, sourceLabel: document.sourceLabel })
+      } catch (cause) {
+        outcome.failed.push({ sourceLabel: document.sourceLabel, reason: message(cause, '内容解析失败'), code: 'parseFailed' })
+      }
+    }
+
+    if (!prepared.length) {
+      error.value = outcome.failed.length ? '所选文件都无法导入' : null
+      return outcome
+    }
+
+    if (options.merge) {
+      const merged = mergeIntoCurrent(prepared.map((item) => item.content))
+      if (!merged) {
+        outcome.failed.push({ sourceLabel: translate('import.source.merge'), reason: '当前没有打开的文档', code: 'mergeNoDocument' })
+        return outcome
+      }
+      outcome.created = prepared.length
+      return outcome
+    }
+
+    if (!(await saveNow())) {
+      outcome.failed.push({ sourceLabel: translate('import.source.import'), reason: '当前文档尚未保存，请稍后重试', code: 'documentUnsaved' })
+      return outcome
+    }
+
+    const created: DocumentRecord[] = []
+    for (const item of prepared) {
+      const record = createDocumentRecord({
+        id: crypto.randomUUID(),
+        title: item.title,
+        categoryId: options.categoryId,
+        content: item.content,
+      })
+      try {
+        const receipt = await api.documents.save(toSavePayload(record))
+        created.push({ ...record, revision: receipt.revision, version: receipt.version, updatedAt: receipt.savedAt })
+        outcome.created += 1
+      } catch (cause) {
+        outcome.failed.push({ sourceLabel: item.sourceLabel, reason: message(cause, '保存失败'), code: 'saveFailed' })
+      }
+    }
+
+    if (created.length) {
+      documents.value = sortByUpdatedAt([...documents.value, ...created])
+      current.value = created[0]!
+      const first = created[0]!
+      saveState.value = savedStateFor(first.revision, first.version, first.updatedAt)
+      error.value = null
+    }
+
+    return outcome
+  }
+
+  /** Appends imported documents to the open one, separated by a rule. */
+  function mergeIntoCurrent(contents: TiptapDocument[]): boolean {
+    const target = current.value
+    if (!target) return false
+    const separator: TiptapNode = { type: 'horizontalRule' }
+    const existing: TiptapNode[] = target.content.content
+    const merged: TiptapDocument = {
+      type: 'doc',
+      content: [
+        ...existing,
+        ...contents.flatMap((content) => [separator, ...content.content]),
+      ],
+    }
+    updateContent(merged)
+    return true
+  }
+
+  /**
+   * Persists data-URL images as attachments and rewrites their `src`.
+   *
+   * Inline images cannot live in the document JSON, so each is written to the
+   * attachment store and the placeholder is replaced with its stable URL. Images
+   * that fail to persist are removed rather than left pointing at nothing.
+   */
+  async function hydrateEmbeddedImages(
+    document: TiptapDocument,
+    images: Array<{ placeholder: string; dataUrl: string }>,
+  ): Promise<TiptapDocument> {
+    if (!images.length) return document
+    const replacements = new Map<string, string>()
+
+    for (const [index, image] of images.entries()) {
+      const decoded = dataUrlToBytes(image.dataUrl)
+      if (!decoded) continue
+      try {
+        const reference = await api.attachments.saveImage({
+          bytes: decoded.bytes,
+          name: `导入图片-${index + 1}.${decoded.extension}`,
+          mimeType: decoded.mimeType,
+          extension: decoded.extension,
+        })
+        replacements.set(image.placeholder, reference.url)
+      } catch {
+        // A failed image must not fail the whole document.
+      }
+    }
+
+    return rewriteImageSources(document, replacements, new Set(images.map((image) => image.placeholder)))
   }
 
   function updateContent(content: TiptapDocument): void {
@@ -292,6 +663,32 @@ export const useDocumentStore = defineStore('document', () => {
     if (!current.value) return
     current.value = { ...current.value, tags: [...tags], revision: current.value.revision + 1 }
     scheduleSave()
+  }
+
+  function toggleFavorite(): boolean {
+    if (!current.value) return false
+    current.value = {
+      ...current.value,
+      favorite: !current.value.favorite,
+      revision: current.value.revision + 1,
+      updatedAt: new Date().toISOString(),
+    }
+    scheduleSave()
+    return current.value.favorite
+  }
+
+  function addTag(tag: string): boolean {
+    if (!current.value) return false
+    const next = tag.trim()
+    if (!next) return false
+    if (current.value.tags.includes(next)) return false
+    updateTags([...current.value.tags, next])
+    return true
+  }
+
+  function removeTag(tag: string): void {
+    if (!current.value) return
+    updateTags(current.value.tags.filter((item) => item !== tag))
   }
 
   function registerEditor(id: string): void {
@@ -327,6 +724,8 @@ export const useDocumentStore = defineStore('document', () => {
   function dispose(): void {
     saveController.value?.dispose()
     saveController.value = null
+    journalSaveController.value?.dispose()
+    journalSaveController.value = null
   }
 
   return {
@@ -334,9 +733,11 @@ export const useDocumentStore = defineStore('document', () => {
     documents,
     categories,
     journals,
+    currentJournal,
     loading,
     error,
     saveState,
+    journalSaveState,
     editorInstanceId,
     isDirty,
     wordCount,
@@ -345,17 +746,30 @@ export const useDocumentStore = defineStore('document', () => {
     createDocument,
     deleteDocument,
     moveDocument,
+    renameDocument,
+    setDocumentFavorite,
+    moveJournal,
+    renameJournal,
     createCategory,
     renameCategory,
     deleteCategory,
     createJournal,
+    selectJournal,
+    closeJournal,
     deleteJournal,
     updateContent,
     updateTitle,
     updateTags,
+    toggleFavorite,
+    addTag,
+    removeTag,
+    updateJournalTitle,
+    updateJournalContent,
+    importDocuments,
     registerEditor,
     unregisterEditor,
     saveNow,
+    saveJournalNow,
     retrySave,
     dispose,
   }
@@ -367,10 +781,17 @@ function toSavePayload(document: DocumentRecord): DocumentSavePayload {
     title: document.title,
     categoryId: document.categoryId,
     tags: [...document.tags],
+    favorite: document.favorite,
     content: cloneDocumentJson(document.content),
     revision: document.revision,
     version: document.version,
   }
+}
+
+// The journal autosave controller holds the live journal record, because that is
+// what the editor mutates; the IPC boundary only needs the save payload shape.
+function toJournalSavePayloadForWrite(journal: JournalRecord): JournalSavePayload {
+  return toJournalSavePayload(journal)
 }
 
 function toJournalSavePayload(journal: JournalRecord): JournalSavePayload {
@@ -397,6 +818,43 @@ function savedStateFor(revision: number, version: number, savedAt: string): Auto
 
 function sortByUpdatedAt<T extends { updatedAt: string }>(records: T[]): T[] {
   return [...records].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+}
+
+/**
+ * Rewrites image `src` values in place (returning a copy). Placeholders without
+ * a replacement are removed so the document never keeps an unresolvable source.
+ */
+function rewriteImageSources(
+  document: TiptapDocument,
+  replacements: Map<string, string>,
+  placeholders: Set<string>,
+): TiptapDocument {
+  const rewriteNode = (node: TiptapNode): TiptapNode | null => {
+    if (node.type === 'image') {
+      const src = typeof node.attrs?.src === 'string' ? node.attrs.src : ''
+      if (placeholders.has(src)) {
+        const replacement = replacements.get(src)
+        if (!replacement) return null
+        return { ...node, attrs: { ...node.attrs, src: replacement } }
+      }
+      return node
+    }
+    if (!node.content) return node
+    const content: TiptapNode[] = []
+    for (const child of node.content) {
+      const rewritten = rewriteNode(child)
+      if (rewritten) content.push(rewritten)
+    }
+    return { ...node, content }
+  }
+
+  const content: TiptapNode[] = []
+  for (const child of document.content) {
+    const rewritten = rewriteNode(child)
+    if (rewritten) content.push(rewritten)
+  }
+
+  return { type: 'doc', content: content.length ? content : [{ type: 'paragraph' }] }
 }
 
 function message(error: unknown, fallback: string): string {

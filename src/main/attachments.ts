@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { copyFile, mkdir, stat } from 'node:fs/promises'
+import { copyFile, mkdir, stat, writeFile } from 'node:fs/promises'
 import { basename, extname, join } from 'node:path'
 import type { AttachmentReference } from '../shared/document.js'
 
@@ -27,6 +27,31 @@ export class AttachmentStore {
     return references
   }
 
+  /**
+   * Persists bytes decoded from an imported file (for example an image embedded
+   * in a DOCX or Markdown data URL) as a normal attachment.
+   */
+  async addBytes(
+    bytes: Uint8Array,
+    name: string,
+    mimeType: string,
+    extension: string,
+  ): Promise<AttachmentReference> {
+    await mkdir(this.baseDir, { recursive: true })
+    const id = randomUUID()
+    const safeExtension = normalizeExtension(extension) ?? extensionFromMime(mimeType)
+    const storedName = `${id}${safeExtension}`
+    const targetPath = join(this.baseDir, storedName)
+    await writeFile(targetPath, bytes)
+    return {
+      id,
+      name,
+      mimeType,
+      size: bytes.byteLength,
+      url: `shizhi-attachment://${storedName}`,
+    }
+  }
+
   resolveUrl(url: string): { path: string; mimeType: string } | null {
     try {
       const parsed = new URL(url)
@@ -46,6 +71,25 @@ export class AttachmentStore {
 export function mimeFromPath(filePath: string): string {
   const extension = extname(filePath).slice(1).toLowerCase()
   return mimeFromExtension(extension)
+}
+
+export function extensionFromMime(mimeType: string): string {
+  const map: Record<string, string> = {
+    'image/png': '.png',
+    'image/jpeg': '.jpg',
+    'image/gif': '.gif',
+    'image/webp': '.webp',
+    'image/bmp': '.bmp',
+    'image/svg+xml': '.svg',
+    'image/tiff': '.tiff',
+  }
+  return map[mimeType.toLowerCase()] ?? '.bin'
+}
+
+/** Accepts only a plain extension such as ".png"; anything else is rejected. */
+function normalizeExtension(extension: string): string | null {
+  const normalized = extension.startsWith('.') ? extension : `.${extension}`
+  return /^\.[a-z0-9]{1,8}$/i.test(normalized) ? normalized.toLowerCase() : null
 }
 
 function mimeFromExtension(extension: string): string {

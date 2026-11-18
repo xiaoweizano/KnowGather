@@ -13,6 +13,7 @@ export function validateDocumentSavePayload(value: unknown): DocumentSavePayload
     title: expectString(candidate.title, 'title'),
     categoryId: expectNullableId(candidate.categoryId, 'categoryId'),
     tags: expectStringArray(candidate.tags, 'tags'),
+    favorite: expectOptionalBoolean(candidate.favorite, 'favorite'),
     content: validateContent(candidate.content),
     revision: expectNonNegativeInteger(candidate.revision, 'revision'),
     version: expectNonNegativeInteger(candidate.version, 'version'),
@@ -75,6 +76,18 @@ function expectStringArray(value: unknown, field: string): string[] {
     throw new TypeError(`${field} must be an array of strings`)
   }
   return [...value]
+}
+
+function expectBoolean(value: unknown, field: string): boolean {
+  if (typeof value !== 'boolean') throw new TypeError(`${field} must be a boolean`)
+  return value
+}
+
+// Documents persisted before the favorite flag existed carry no value. Missing
+// is treated as false so old databases keep loading; a wrong type still fails.
+function expectOptionalBoolean(value: unknown, field: string): boolean {
+  if (value === undefined) return false
+  return expectBoolean(value, field)
 }
 
 function expectNonNegativeInteger(value: unknown, field: string): number {

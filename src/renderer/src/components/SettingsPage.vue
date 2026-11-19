@@ -255,139 +255,149 @@ function platformLabel(): string {
         <section v-if="section === 'general'" class="settings-group" :aria-label="t('settings.section.general')">
           <h2>{{ t('settings.section.general') }}</h2>
 
-          <div class="settings-row">
-            <div class="settings-copy">
-              <strong>{{ t('settings.language') }}</strong>
-              <small>{{ t('settings.languageHint') }}</small>
-            </div>
-            <div class="segmented">
-              <button
-                v-for="option in SUPPORTED_LOCALES"
-                :key="option.value"
-                type="button"
-                :class="{ active: locale === option.value }"
-                @click="changeLocale(option.value)"
-              >{{ option.label }}</button>
+          <div class="settings-card">
+            <h3 class="settings-card-title">{{ t('settings.card.startup') }}</h3>
+            <div class="settings-card-body">
+              <div class="settings-row">
+                <div class="settings-copy">
+                  <strong>{{ t('settings.language') }}</strong>
+                  <small>{{ t('settings.languageHint') }}</small>
+                </div>
+                <div class="segmented">
+                  <button
+                    v-for="option in SUPPORTED_LOCALES"
+                    :key="option.value"
+                    type="button"
+                    :class="{ active: locale === option.value }"
+                    @click="changeLocale(option.value)"
+                  >{{ option.label }}</button>
+                </div>
+              </div>
+
+              <div class="settings-row">
+                <div class="settings-copy">
+                  <strong>{{ t('settings.autoLaunch') }}</strong>
+                  <small>{{ settingsStore.autoLaunchSupported ? t('settings.autoLaunchHint') : t('settings.installedOnly') }}</small>
+                </div>
+                <button
+                  type="button"
+                  class="toggle"
+                  role="switch"
+                  :aria-checked="settings.autoLaunch"
+                  :class="{ on: settings.autoLaunch }"
+                  @click="settingsStore.setAutoLaunch(!settings.autoLaunch)"
+                ><span /></button>
+              </div>
+
+              <div class="settings-row">
+                <div class="settings-copy">
+                  <strong>{{ t('settings.silentStart') }}</strong>
+                  <small>{{ t('settings.silentStartHint') }}</small>
+                </div>
+                <button
+                  type="button"
+                  class="toggle"
+                  role="switch"
+                  :aria-checked="settings.silentStart"
+                  :class="{ on: settings.silentStart }"
+                  @click="updateSetting('silentStart', !settings.silentStart)"
+                ><span /></button>
+              </div>
+
+              <div class="settings-row">
+                <div class="settings-copy">
+                  <strong>{{ t('settings.hideFromTaskbar') }}</strong>
+                  <small>{{ t('settings.hideFromTaskbarHint') }}</small>
+                </div>
+                <button
+                  type="button"
+                  class="toggle"
+                  role="switch"
+                  :aria-checked="settings.hideFromTaskbar"
+                  :class="{ on: settings.hideFromTaskbar }"
+                  @click="settingsStore.setTaskbarVisible(settings.hideFromTaskbar)"
+                ><span /></button>
+              </div>
+
+              <div class="settings-row">
+                <div class="settings-copy">
+                  <strong>{{ t('settings.closeToTray') }}</strong>
+                  <small>{{ t('settings.closeToTrayHint') }}</small>
+                </div>
+                <button
+                  type="button"
+                  class="toggle"
+                  role="switch"
+                  :aria-checked="settings.closeToTray"
+                  :class="{ on: settings.closeToTray }"
+                  @click="updateSetting('closeToTray', !settings.closeToTray)"
+                ><span /></button>
+              </div>
+
+              <div class="settings-row">
+                <div class="settings-copy">
+                  <strong>{{ t('settings.minimizeToTray') }}</strong>
+                  <small>{{ t('settings.minimizeToTrayHint') }}</small>
+                </div>
+                <button
+                  type="button"
+                  class="toggle"
+                  role="switch"
+                  :aria-checked="settings.minimizeToTray"
+                  :class="{ on: settings.minimizeToTray }"
+                  @click="updateSetting('minimizeToTray', !settings.minimizeToTray)"
+                ><span /></button>
+              </div>
             </div>
           </div>
 
-          <div class="settings-row">
-            <div class="settings-copy">
-              <strong>{{ t('settings.autoLaunch') }}</strong>
-              <small>{{ settingsStore.autoLaunchSupported ? t('settings.autoLaunchHint') : t('settings.installedOnly') }}</small>
-            </div>
-            <button
-              type="button"
-              class="toggle"
-              role="switch"
-              :aria-checked="settings.autoLaunch"
-              :class="{ on: settings.autoLaunch }"
-              @click="settingsStore.setAutoLaunch(!settings.autoLaunch)"
-            ><span /></button>
-          </div>
+          <div class="settings-card">
+            <h3 class="settings-card-title">{{ t('settings.card.updates') }}</h3>
+            <div class="settings-card-body">
+              <div class="settings-row">
+                <div class="settings-copy">
+                  <strong>{{ t('settings.autoUpdate') }}</strong>
+                  <small>{{ t('settings.autoUpdateHint') }}</small>
+                </div>
+                <button
+                  type="button"
+                  class="toggle"
+                  role="switch"
+                  :aria-checked="settings.autoCheckUpdates"
+                  :class="{ on: settings.autoCheckUpdates }"
+                  @click="updateSetting('autoCheckUpdates', !settings.autoCheckUpdates)"
+                ><span /></button>
+              </div>
 
-          <div class="settings-row">
-            <div class="settings-copy">
-              <strong>{{ t('settings.silentStart') }}</strong>
-              <small>{{ t('settings.silentStartHint') }}</small>
+              <div class="settings-row stacked">
+                <div class="settings-copy">
+                  <strong>{{ t('settings.updateFeed') }}</strong>
+                  <small>{{ t('settings.updateFeedHint') }}</small>
+                </div>
+                <div class="settings-inline">
+                  <input
+                    v-model="feedDraft"
+                    class="settings-input"
+                    type="url"
+                    :placeholder="t('settings.updateFeedPlaceholder')"
+                    @blur="saveFeed"
+                    @keydown.enter.prevent="saveFeed"
+                  />
+                  <button type="button" class="settings-small primary" :disabled="updateBusy" @click="checkUpdates">
+                    {{ updateBusy ? t('settings.checking') : t('settings.checkUpdate') }}
+                  </button>
+                </div>
+                <p v-if="updateResult" class="settings-note" :class="updateResult.status">
+                  <template v-if="updateResult.status === 'not-configured'">{{ t('update.notConfigured') }}</template>
+                  <template v-else-if="updateResult.status === 'up-to-date'">{{ t('update.upToDate', { version: updateResult.latestVersion ?? updateResult.currentVersion }) }}</template>
+                  <template v-else-if="updateResult.status === 'available'">
+                    {{ t('update.available', { version: updateResult.latestVersion ?? '' }) }}
+                    <button v-if="updateResult.url" type="button" class="settings-link" @click="openDownload">{{ t('update.download') }}</button>
+                  </template>
+                  <template v-else>{{ t('update.error', { message: updateResult.message ?? '' }) }}</template>
+                </p>
+              </div>
             </div>
-            <button
-              type="button"
-              class="toggle"
-              role="switch"
-              :aria-checked="settings.silentStart"
-              :class="{ on: settings.silentStart }"
-              @click="updateSetting('silentStart', !settings.silentStart)"
-            ><span /></button>
-          </div>
-
-          <div class="settings-row">
-            <div class="settings-copy">
-              <strong>{{ t('settings.hideFromTaskbar') }}</strong>
-              <small>{{ t('settings.hideFromTaskbarHint') }}</small>
-            </div>
-            <button
-              type="button"
-              class="toggle"
-              role="switch"
-              :aria-checked="settings.hideFromTaskbar"
-              :class="{ on: settings.hideFromTaskbar }"
-              @click="settingsStore.setTaskbarVisible(settings.hideFromTaskbar)"
-            ><span /></button>
-          </div>
-
-          <div class="settings-row">
-            <div class="settings-copy">
-              <strong>{{ t('settings.closeToTray') }}</strong>
-              <small>{{ t('settings.closeToTrayHint') }}</small>
-            </div>
-            <button
-              type="button"
-              class="toggle"
-              role="switch"
-              :aria-checked="settings.closeToTray"
-              :class="{ on: settings.closeToTray }"
-              @click="updateSetting('closeToTray', !settings.closeToTray)"
-            ><span /></button>
-          </div>
-
-          <div class="settings-row">
-            <div class="settings-copy">
-              <strong>{{ t('settings.minimizeToTray') }}</strong>
-              <small>{{ t('settings.minimizeToTrayHint') }}</small>
-            </div>
-            <button
-              type="button"
-              class="toggle"
-              role="switch"
-              :aria-checked="settings.minimizeToTray"
-              :class="{ on: settings.minimizeToTray }"
-              @click="updateSetting('minimizeToTray', !settings.minimizeToTray)"
-            ><span /></button>
-          </div>
-
-          <div class="settings-row">
-            <div class="settings-copy">
-              <strong>{{ t('settings.autoUpdate') }}</strong>
-              <small>{{ t('settings.autoUpdateHint') }}</small>
-            </div>
-            <button
-              type="button"
-              class="toggle"
-              role="switch"
-              :aria-checked="settings.autoCheckUpdates"
-              :class="{ on: settings.autoCheckUpdates }"
-              @click="updateSetting('autoCheckUpdates', !settings.autoCheckUpdates)"
-            ><span /></button>
-          </div>
-
-          <div class="settings-row stacked">
-            <div class="settings-copy">
-              <strong>{{ t('settings.updateFeed') }}</strong>
-              <small>{{ t('settings.updateFeedHint') }}</small>
-            </div>
-            <div class="settings-inline">
-              <input
-                v-model="feedDraft"
-                class="settings-input"
-                type="url"
-                :placeholder="t('settings.updateFeedPlaceholder')"
-                @blur="saveFeed"
-                @keydown.enter.prevent="saveFeed"
-              />
-              <button type="button" class="settings-small primary" :disabled="updateBusy" @click="checkUpdates">
-                {{ updateBusy ? t('settings.checking') : t('settings.checkUpdate') }}
-              </button>
-            </div>
-            <p v-if="updateResult" class="settings-note" :class="updateResult.status">
-              <template v-if="updateResult.status === 'not-configured'">{{ t('update.notConfigured') }}</template>
-              <template v-else-if="updateResult.status === 'up-to-date'">{{ t('update.upToDate', { version: updateResult.latestVersion ?? updateResult.currentVersion }) }}</template>
-              <template v-else-if="updateResult.status === 'available'">
-                {{ t('update.available', { version: updateResult.latestVersion ?? '' }) }}
-                <button v-if="updateResult.url" type="button" class="settings-link" @click="openDownload">{{ t('update.download') }}</button>
-              </template>
-              <template v-else>{{ t('update.error', { message: updateResult.message ?? '' }) }}</template>
-            </p>
           </div>
         </section>
 
@@ -395,63 +405,73 @@ function platformLabel(): string {
         <section v-if="section === 'editor'" class="settings-group" :aria-label="t('settings.section.editor')">
           <h2>{{ t('settings.section.editor') }}</h2>
 
-          <div v-for="option in [
-            { key: 'outline', label: 'settings.outline', hint: 'settings.outlineHint', get: ui.outlineVisible, set: ui.setOutlineVisible },
-            { key: 'fold', label: 'settings.foldHeadings', hint: 'settings.foldHeadingsHint', get: ui.foldHeadings, set: ui.setFoldHeadings },
-            { key: 'lines', label: 'settings.lineNumbers', hint: 'settings.lineNumbersHint', get: ui.showLineNumbers, set: ui.setShowLineNumbers },
-            { key: 'guides', label: 'settings.indentGuides', hint: 'settings.indentGuidesHint', get: ui.indentGuides, set: ui.setIndentGuides },
-            { key: 'hanging', label: 'settings.hangingIndent', hint: 'settings.hangingIndentHint', get: ui.hangingIndent, set: ui.setHangingIndent },
-          ]" :key="option.key" class="settings-row">
-            <div class="settings-copy">
-              <strong>{{ t(option.label) }}</strong>
-              <small>{{ t(option.hint) }}</small>
-            </div>
-            <button
-              type="button"
-              class="toggle"
-              role="switch"
-              :aria-checked="option.get"
-              :class="{ on: option.get }"
-              @click="toggle(option.get, option.set)"
-            ><span /></button>
-          </div>
-
-          <div class="settings-row">
-            <div class="settings-copy">
-              <strong>{{ t('settings.lineHeight') }}</strong>
-              <small>{{ t('settings.lineHeightHint') }} · {{ ui.lineHeight.toFixed(2) }}</small>
-            </div>
-            <input class="settings-range" type="range" min="1.3" max="2.2" step="0.02" :value="ui.lineHeight" @input="ui.setLineHeight(Number(($event.target as HTMLInputElement).value))" />
-          </div>
-
-          <div class="settings-row">
-            <div class="settings-copy">
-              <strong>{{ t('settings.paragraphSpacing') }}</strong>
-              <small>{{ t('settings.paragraphSpacingHint') }} · {{ ui.paragraphSpacing.toFixed(2) }}em</small>
-            </div>
-            <input class="settings-range" type="range" min="0" max="1.2" step="0.02" :value="ui.paragraphSpacing" @input="ui.setParagraphSpacing(Number(($event.target as HTMLInputElement).value))" />
-          </div>
-
-          <div class="settings-row">
-            <div class="settings-copy">
-              <strong>{{ t('settings.contentWidth') }}</strong>
-              <small>{{ t('settings.contentWidthHint') }}</small>
-            </div>
-            <div class="segmented">
-              <button type="button" :class="{ active: ui.contentWidth === 'comfortable' }" @click="ui.setContentWidth('comfortable')">{{ t('settings.widthComfortable') }}</button>
-              <button type="button" :class="{ active: ui.contentWidth === 'wide' }" @click="ui.setContentWidth('wide')">{{ t('settings.widthWide') }}</button>
+          <div class="settings-card">
+            <h3 class="settings-card-title">{{ t('settings.card.editing') }}</h3>
+            <div class="settings-card-body">
+              <div v-for="option in [
+                { key: 'outline', label: 'settings.outline', hint: 'settings.outlineHint', get: ui.outlineVisible, set: ui.setOutlineVisible },
+                { key: 'fold', label: 'settings.foldHeadings', hint: 'settings.foldHeadingsHint', get: ui.foldHeadings, set: ui.setFoldHeadings },
+                { key: 'lines', label: 'settings.lineNumbers', hint: 'settings.lineNumbersHint', get: ui.showLineNumbers, set: ui.setShowLineNumbers },
+                { key: 'guides', label: 'settings.indentGuides', hint: 'settings.indentGuidesHint', get: ui.indentGuides, set: ui.setIndentGuides },
+                { key: 'hanging', label: 'settings.hangingIndent', hint: 'settings.hangingIndentHint', get: ui.hangingIndent, set: ui.setHangingIndent },
+              ]" :key="option.key" class="settings-row">
+                <div class="settings-copy">
+                  <strong>{{ t(option.label) }}</strong>
+                  <small>{{ t(option.hint) }}</small>
+                </div>
+                <button
+                  type="button"
+                  class="toggle"
+                  role="switch"
+                  :aria-checked="option.get"
+                  :class="{ on: option.get }"
+                  @click="toggle(option.get, option.set)"
+                ><span /></button>
+              </div>
             </div>
           </div>
 
-          <div class="settings-row">
-            <div class="settings-copy">
-              <strong>{{ t('settings.zoom') }}</strong>
-              <small>{{ t('settings.zoomHint', { value: ui.zoom }) }}</small>
-            </div>
-            <div class="settings-controls">
-              <button type="button" class="settings-small" @click="ui.adjustZoom(-10)">{{ t('settings.zoomOut') }}</button>
-              <button type="button" class="settings-small" @click="ui.resetZoom()">{{ t('settings.zoomReset') }}</button>
-              <button type="button" class="settings-small" @click="ui.adjustZoom(10)">{{ t('settings.zoomIn') }}</button>
+          <div class="settings-card">
+            <h3 class="settings-card-title">{{ t('settings.card.typography') }}</h3>
+            <div class="settings-card-body">
+              <div class="settings-row">
+                <div class="settings-copy">
+                  <strong>{{ t('settings.lineHeight') }}</strong>
+                  <small>{{ t('settings.lineHeightHint') }} · {{ ui.lineHeight.toFixed(2) }}</small>
+                </div>
+                <input class="settings-range" type="range" min="1.3" max="2.2" step="0.02" :value="ui.lineHeight" @input="ui.setLineHeight(Number(($event.target as HTMLInputElement).value))" />
+              </div>
+
+              <div class="settings-row">
+                <div class="settings-copy">
+                  <strong>{{ t('settings.paragraphSpacing') }}</strong>
+                  <small>{{ t('settings.paragraphSpacingHint') }} · {{ ui.paragraphSpacing.toFixed(2) }}em</small>
+                </div>
+                <input class="settings-range" type="range" min="0" max="1.2" step="0.02" :value="ui.paragraphSpacing" @input="ui.setParagraphSpacing(Number(($event.target as HTMLInputElement).value))" />
+              </div>
+
+              <div class="settings-row">
+                <div class="settings-copy">
+                  <strong>{{ t('settings.contentWidth') }}</strong>
+                  <small>{{ t('settings.contentWidthHint') }}</small>
+                </div>
+                <div class="segmented">
+                  <button type="button" :class="{ active: ui.contentWidth === 'comfortable' }" @click="ui.setContentWidth('comfortable')">{{ t('settings.widthComfortable') }}</button>
+                  <button type="button" :class="{ active: ui.contentWidth === 'wide' }" @click="ui.setContentWidth('wide')">{{ t('settings.widthWide') }}</button>
+                </div>
+              </div>
+
+              <div class="settings-row">
+                <div class="settings-copy">
+                  <strong>{{ t('settings.zoom') }}</strong>
+                  <small>{{ t('settings.zoomHint', { value: ui.zoom }) }}</small>
+                </div>
+                <div class="settings-controls">
+                  <button type="button" class="settings-small" @click="ui.adjustZoom(-10)">{{ t('settings.zoomOut') }}</button>
+                  <button type="button" class="settings-small" @click="ui.resetZoom()">{{ t('settings.zoomReset') }}</button>
+                  <button type="button" class="settings-small" @click="ui.adjustZoom(10)">{{ t('settings.zoomIn') }}</button>
+                </div>
+              </div>
             </div>
           </div>
         </section>
@@ -460,165 +480,182 @@ function platformLabel(): string {
         <section v-if="section === 'appearance'" class="settings-group" :aria-label="t('settings.section.appearance')">
           <h2>{{ t('settings.section.appearance') }}</h2>
 
-          <div class="settings-row">
-            <div class="settings-copy">
-              <strong>{{ t('settings.theme') }}</strong>
-              <small>{{ t('settings.themeHint', { name: t(`settings.theme.${ui.themePreference}`) }) }}</small>
-            </div>
-            <div class="segmented">
-              <button type="button" :class="{ active: ui.themePreference === 'light' }" @click="setTheme('light')">{{ t('settings.theme.light') }}</button>
-              <button type="button" :class="{ active: ui.themePreference === 'dark' }" @click="setTheme('dark')">{{ t('settings.theme.dark') }}</button>
-              <button type="button" :class="{ active: ui.themePreference === 'system' }" @click="setTheme('system')">{{ t('settings.theme.system') }}</button>
+          <div class="settings-card">
+            <h3 class="settings-card-title">{{ t('settings.card.display') }}</h3>
+            <div class="settings-card-body">
+              <div class="settings-row">
+                <div class="settings-copy">
+                  <strong>{{ t('settings.theme') }}</strong>
+                  <small>{{ t('settings.themeHint', { name: t(`settings.theme.${ui.themePreference}`) }) }}</small>
+                </div>
+                <div class="segmented">
+                  <button type="button" :class="{ active: ui.themePreference === 'light' }" @click="setTheme('light')">{{ t('settings.theme.light') }}</button>
+                  <button type="button" :class="{ active: ui.themePreference === 'dark' }" @click="setTheme('dark')">{{ t('settings.theme.dark') }}</button>
+                  <button type="button" :class="{ active: ui.themePreference === 'system' }" @click="setTheme('system')">{{ t('settings.theme.system') }}</button>
+                </div>
+              </div>
+
+              <div class="settings-row">
+                <div class="settings-copy">
+                  <strong>{{ t('settings.accent') }}</strong>
+                  <small>{{ t('settings.accentHint') }}</small>
+                </div>
+                <div class="swatch-row">
+                  <button
+                    v-for="value in ACCENT_OPTIONS"
+                    :key="value"
+                    type="button"
+                    class="accent-swatch"
+                    :class="{ active: ui.accent === value }"
+                    :style="accentStyle(value)"
+                    :title="t(`settings.accent.${value}`)"
+                    :aria-label="t(`settings.accent.${value}`)"
+                    @click="setAccent(value)"
+                  />
+                </div>
+              </div>
+
+              <div class="settings-row">
+                <div class="settings-copy">
+                  <strong>{{ t('settings.fontSize.ui') }}</strong>
+                  <small>{{ ui.uiFontSize }}px</small>
+                </div>
+                <input class="settings-range" type="range" min="10" max="20" step="1" :value="ui.uiFontSize" @input="ui.setUiFontSize(Number(($event.target as HTMLInputElement).value))" />
+              </div>
+
+              <div class="settings-row">
+                <div class="settings-copy">
+                  <strong>{{ t('settings.motion') }}</strong>
+                  <small>{{ t('settings.motionHint') }}</small>
+                </div>
+                <div class="segmented">
+                  <button
+                    v-for="value in MOTION_OPTIONS"
+                    :key="value"
+                    type="button"
+                    :class="{ active: ui.motion === value }"
+                    @click="setMotion(value)"
+                  >{{ t(`settings.motion.${value}`) }}</button>
+                </div>
+              </div>
             </div>
           </div>
 
-          <div class="settings-row">
-            <div class="settings-copy">
-              <strong>{{ t('settings.accent') }}</strong>
-              <small>{{ t('settings.accentHint') }}</small>
-            </div>
-            <div class="swatch-row">
-              <button
-                v-for="value in ACCENT_OPTIONS"
-                :key="value"
-                type="button"
-                class="accent-swatch"
-                :class="{ active: ui.accent === value }"
-                :style="accentStyle(value)"
-                :title="t(`settings.accent.${value}`)"
-                :aria-label="t(`settings.accent.${value}`)"
-                @click="setAccent(value)"
-              />
+          <div class="settings-card">
+            <h3 class="settings-card-title">{{ t('settings.card.typography') }}</h3>
+            <div class="settings-card-body">
+              <div class="settings-row">
+                <div class="settings-copy">
+                  <strong>{{ t('settings.font.ui') }}</strong>
+                </div>
+                <select class="settings-select" :value="ui.uiFont" @change="ui.setUiFont(($event.target as HTMLSelectElement).value)">
+                  <option v-for="option in FONT_OPTIONS" :key="option.value" :value="option.value">{{ option.value === 'system' ? t('settings.font.system') : option.label }}</option>
+                </select>
+              </div>
+
+              <div class="settings-row">
+                <div class="settings-copy">
+                  <strong>{{ t('settings.font.body') }}</strong>
+                </div>
+                <select class="settings-select" :value="ui.bodyFont" @change="ui.setBodyFont(($event.target as HTMLSelectElement).value)">
+                  <option v-for="option in FONT_OPTIONS" :key="option.value" :value="option.value">{{ option.value === 'system' ? t('settings.font.system') : option.label }}</option>
+                </select>
+              </div>
+
+              <div class="settings-row">
+                <div class="settings-copy">
+                  <strong>{{ t('settings.font.code') }}</strong>
+                </div>
+                <select class="settings-select" :value="ui.codeFont" @change="ui.setCodeFont(($event.target as HTMLSelectElement).value)">
+                  <option v-for="option in CODE_FONT_OPTIONS" :key="option.value" :value="option.value">{{ option.value === 'system' ? t('settings.font.system') : option.label }}</option>
+                </select>
+              </div>
+
+              <div class="settings-row">
+                <div class="settings-copy">
+                  <strong>{{ t('settings.fontSize.body') }}</strong>
+                  <small>{{ ui.bodyFontSize }}px</small>
+                </div>
+                <input class="settings-range" type="range" min="12" max="24" step="1" :value="ui.bodyFontSize" @input="ui.setBodyFontSize(Number(($event.target as HTMLInputElement).value))" />
+              </div>
             </div>
           </div>
 
-          <div class="settings-row">
-            <div class="settings-copy">
-              <strong>{{ t('settings.font.ui') }}</strong>
-            </div>
-            <select class="settings-select" :value="ui.uiFont" @change="ui.setUiFont(($event.target as HTMLSelectElement).value)">
-              <option v-for="option in FONT_OPTIONS" :key="option.value" :value="option.value">{{ option.value === 'system' ? t('settings.font.system') : option.label }}</option>
-            </select>
-          </div>
+          <div class="settings-card">
+            <h3 class="settings-card-title">{{ t('settings.card.extras') }}</h3>
+            <div class="settings-card-body">
+              <div class="settings-row">
+                <div class="settings-copy">
+                  <strong>{{ t('settings.focusMode') }}</strong>
+                  <small>{{ t('settings.focusModeHint') }}</small>
+                </div>
+                <button
+                  type="button"
+                  class="toggle"
+                  role="switch"
+                  :aria-checked="ui.focusMode"
+                  :class="{ on: ui.focusMode }"
+                  @click="ui.toggleFocusMode()"
+                ><span /></button>
+              </div>
 
-          <div class="settings-row">
-            <div class="settings-copy">
-              <strong>{{ t('settings.font.body') }}</strong>
-            </div>
-            <select class="settings-select" :value="ui.bodyFont" @change="ui.setBodyFont(($event.target as HTMLSelectElement).value)">
-              <option v-for="option in FONT_OPTIONS" :key="option.value" :value="option.value">{{ option.value === 'system' ? t('settings.font.system') : option.label }}</option>
-            </select>
-          </div>
+              <div class="settings-row">
+                <div class="settings-copy">
+                  <strong>{{ t('settings.companion') }}</strong>
+                  <small>{{ t('settings.companionHint') }}</small>
+                </div>
+                <button
+                  type="button"
+                  class="toggle"
+                  role="switch"
+                  :aria-checked="ui.companionVisible"
+                  :class="{ on: ui.companionVisible }"
+                  @click="ui.toggleCompanion()"
+                ><span /></button>
+              </div>
 
-          <div class="settings-row">
-            <div class="settings-copy">
-              <strong>{{ t('settings.font.code') }}</strong>
+              <div class="settings-row stacked">
+                <div class="settings-copy">
+                  <strong>{{ t('settings.companionStyle') }}</strong>
+                  <small>{{ t('settings.companion.uploadHint') }}</small>
+                </div>
+                <div class="companion-grid">
+                  <button
+                    v-for="style in COMPANION_STYLES"
+                    :key="style"
+                    type="button"
+                    class="companion-option"
+                    :class="{ active: ui.companionStyle === style }"
+                    :title="t(`settings.companion.style.${style}`)"
+                    @click="setCompanionStyle(style)"
+                  >
+                    <ShizhiMascot :variant="style" compact />
+                    <span>{{ t(`settings.companion.style.${style}`) }}</span>
+                  </button>
+                  <button
+                    type="button"
+                    class="companion-option custom"
+                    :class="{ active: ui.companionStyle === 'custom' }"
+                    :title="t('settings.companion.style.custom')"
+                    @click="pickCompanionImage"
+                  >
+                    <ShizhiMascot v-if="ui.customCompanionUrl" variant="custom" :src="ui.customCompanionUrl" compact />
+                    <span v-else class="companion-placeholder"><AppIcon name="image" :size="18" /></span>
+                    <span>{{ companionBusy ? t('settings.companion.uploading') : t('settings.companion.style.custom') }}</span>
+                  </button>
+                </div>
+                <p v-if="companionError" class="settings-note error">{{ companionError }}</p>
+                <button v-if="ui.customCompanionUrl" type="button" class="settings-small" @click="ui.clearCustomCompanion()">{{ t('settings.companion.reset') }}</button>
+              </div>
             </div>
-            <select class="settings-select" :value="ui.codeFont" @change="ui.setCodeFont(($event.target as HTMLSelectElement).value)">
-              <option v-for="option in CODE_FONT_OPTIONS" :key="option.value" :value="option.value">{{ option.value === 'system' ? t('settings.font.system') : option.label }}</option>
-            </select>
-          </div>
-
-          <div class="settings-row">
-            <div class="settings-copy">
-              <strong>{{ t('settings.fontSize.ui') }}</strong>
-              <small>{{ ui.uiFontSize }}px</small>
-            </div>
-            <input class="settings-range" type="range" min="10" max="20" step="1" :value="ui.uiFontSize" @input="ui.setUiFontSize(Number(($event.target as HTMLInputElement).value))" />
-          </div>
-
-          <div class="settings-row">
-            <div class="settings-copy">
-              <strong>{{ t('settings.fontSize.body') }}</strong>
-              <small>{{ ui.bodyFontSize }}px</small>
-            </div>
-            <input class="settings-range" type="range" min="12" max="24" step="1" :value="ui.bodyFontSize" @input="ui.setBodyFontSize(Number(($event.target as HTMLInputElement).value))" />
-          </div>
-
-          <div class="settings-row">
-            <div class="settings-copy">
-              <strong>{{ t('settings.motion') }}</strong>
-              <small>{{ t('settings.motionHint') }}</small>
-            </div>
-            <div class="segmented">
-              <button
-                v-for="value in MOTION_OPTIONS"
-                :key="value"
-                type="button"
-                :class="{ active: ui.motion === value }"
-                @click="setMotion(value)"
-              >{{ t(`settings.motion.${value}`) }}</button>
-            </div>
-          </div>
-
-          <div class="settings-row">
-            <div class="settings-copy">
-              <strong>{{ t('settings.companion') }}</strong>
-              <small>{{ t('settings.companionHint') }}</small>
-            </div>
-            <button
-              type="button"
-              class="toggle"
-              role="switch"
-              :aria-checked="ui.companionVisible"
-              :class="{ on: ui.companionVisible }"
-              @click="ui.toggleCompanion()"
-            ><span /></button>
-          </div>
-
-          <div class="settings-row stacked">
-            <div class="settings-copy">
-              <strong>{{ t('settings.companionStyle') }}</strong>
-              <small>{{ t('settings.companion.uploadHint') }}</small>
-            </div>
-            <div class="companion-grid">
-              <button
-                v-for="style in COMPANION_STYLES"
-                :key="style"
-                type="button"
-                class="companion-option"
-                :class="{ active: ui.companionStyle === style }"
-                :title="t(`settings.companion.style.${style}`)"
-                @click="setCompanionStyle(style)"
-              >
-                <ShizhiMascot :variant="style" compact />
-                <span>{{ t(`settings.companion.style.${style}`) }}</span>
-              </button>
-              <button
-                type="button"
-                class="companion-option custom"
-                :class="{ active: ui.companionStyle === 'custom' }"
-                :title="t('settings.companion.style.custom')"
-                @click="pickCompanionImage"
-              >
-                <ShizhiMascot v-if="ui.customCompanionUrl" variant="custom" :src="ui.customCompanionUrl" compact />
-                <span v-else class="companion-placeholder"><AppIcon name="image" :size="18" /></span>
-                <span>{{ companionBusy ? t('settings.companion.uploading') : t('settings.companion.style.custom') }}</span>
-              </button>
-            </div>
-            <p v-if="companionError" class="settings-note error">{{ companionError }}</p>
-            <button v-if="ui.customCompanionUrl" type="button" class="settings-small" @click="ui.clearCustomCompanion()">{{ t('settings.companion.reset') }}</button>
-          </div>
-
-          <div class="settings-row">
-            <div class="settings-copy">
-              <strong>{{ t('settings.focusMode') }}</strong>
-              <small>{{ t('settings.focusModeHint') }}</small>
-            </div>
-            <button
-              type="button"
-              class="toggle"
-              role="switch"
-              :aria-checked="ui.focusMode"
-              :class="{ on: ui.focusMode }"
-              @click="ui.toggleFocusMode()"
-            ><span /></button>
           </div>
         </section>
 
         <!-- ---------------------------------------------------------- shortcuts -->
         <section v-if="section === 'shortcuts'" class="settings-group" :aria-label="t('settings.section.shortcuts')">
           <h2>{{ t('settings.section.shortcuts') }}</h2>
+          <div class="settings-card settings-card--wide">
+            <div class="settings-card-body">
           <div class="settings-inline spread">
             <input v-model="shortcutQuery" class="settings-input" type="search" :placeholder="t('shortcuts.searchPlaceholder')" />
             <button type="button" class="settings-small" @click="resetAllShortcuts">{{ t('shortcuts.resetAll') }}</button>
@@ -653,12 +690,16 @@ function platformLabel(): string {
               <kbd>{{ entry.binding }}</kbd>
             </div>
           </div>
+            </div>
+          </div>
         </section>
 
         <!-- --------------------------------------------------------------- data -->
         <section v-if="section === 'data'" class="settings-group" :aria-label="t('settings.section.data')">
           <h2>{{ t('settings.section.data') }}</h2>
 
+          <div class="settings-card settings-card--wide settings-card--list">
+            <div class="settings-card-body">
           <div class="settings-row readonly">
             <div class="settings-copy">
               <strong>{{ t('settings.storage') }}</strong>
@@ -698,6 +739,8 @@ function platformLabel(): string {
             </button>
           </div>
           <p v-if="actionMessage" class="settings-note">{{ actionMessage }}</p>
+            </div>
+          </div>
         </section>
 
         <!-- -------------------------------------------------------------- about -->
@@ -713,6 +756,8 @@ function platformLabel(): string {
             <span class="settings-value">{{ appInfo?.version ?? '0.1.0' }}</span>
           </div>
 
+          <div class="settings-card settings-card--wide settings-card--list">
+            <div class="settings-card-body">
           <div class="settings-row readonly">
             <div class="settings-copy"><strong>{{ t('settings.platform') }}</strong></div>
             <span class="settings-value">{{ platformLabel() }}</span>
@@ -729,6 +774,8 @@ function platformLabel(): string {
               <small>{{ t('settings.aiHint') }}</small>
             </div>
             <span class="settings-value muted"><AppIcon name="info" :size="14" /> {{ t('settings.aiDisabled') }}</span>
+          </div>
+            </div>
           </div>
         </section>
       </div>
@@ -823,26 +870,87 @@ function platformLabel(): string {
   scrollbar-width: thin;
 }
 
-/* One readable column, centred. Letting the card stretch to the full content
-   width pushed each row's control ~700px away from its label. */
-.settings-content > .settings-group {
-  max-width: 880px;
-  margin: 0 auto;
-}
-
+/* Cards share the row equally, whatever their count: two cards split the width
+   in half, three split it in thirds. A grid with a fixed column count left a
+   dead column behind whenever the count did not divide evenly. */
 .settings-group {
   display: flex;
-  flex-direction: column;
-  gap: 0;
-  padding: 4px 18px 14px;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 14px 18px 18px;
   border: 1px solid var(--border-soft);
   border-radius: 14px;
   background: var(--panel-strong);
   animation: settings-in var(--motion-base) var(--ease-out) both;
 }
 
+.settings-group > h2,
+.settings-group > .settings-subheading,
+.settings-group > .settings-note,
+.settings-group > .settings-inline.spread,
+.settings-group > .about-card,
+.settings-group > .editor-shortcuts {
+  width: 100%;
+}
+
+/* Sections that are a single long list (shortcuts, data, about) use one card
+   across the full width rather than a row of narrow ones. */
+.settings-card--wide {
+  flex-basis: 100%;
+}
+
+/* Rows in a wide card flow into columns so a long list does not become one
+   very wide row of whitespace. */
+.settings-card--wide:not(.settings-card--list) .settings-card-body {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+  align-items: start;
+}
+
+/* List-style cards are a single column of label/value rows; `--wide` would
+   otherwise tile them into grid columns. */
+.settings-card--list .settings-card-body {
+  display: flex;
+  flex-direction: column;
+  max-width: 620px;
+}
+
+.settings-card--wide .settings-inline.spread,
+.settings-card--wide .settings-note,
+.settings-card--wide .settings-subheading,
+.settings-card--wide .editor-shortcuts {
+  grid-column: 1 / -1;
+}
+
+.settings-card {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 320px;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--border-soft);
+  border-radius: 11px;
+  background: var(--panel-strong);
+}
+
+.settings-card-title {
+  margin: 0;
+  padding: 10px 14px 0;
+  color: var(--text-tertiary);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.settings-card-body {
+  display: flex;
+  flex-direction: column;
+}
+
 .settings-group h2 {
-  margin: 12px 0 4px;
+  margin: 0 2px 2px;
   color: var(--text-secondary);
   font-size: 10px;
   font-weight: 700;
@@ -850,16 +958,18 @@ function platformLabel(): string {
   text-transform: uppercase;
 }
 
+/* Rows are separated by hairlines inside a card, not by their own borders. */
 .settings-row {
   display: flex;
-  min-height: 52px;
+  min-height: 54px;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
+  padding: 8px 14px;
   border-top: 1px solid var(--border-soft);
 }
 
-.settings-group h2 + .settings-row {
+.settings-card-body > .settings-row:first-child {
   border-top: 0;
 }
 
@@ -867,7 +977,7 @@ function platformLabel(): string {
   flex-direction: column;
   align-items: stretch;
   gap: 8px;
-  padding: 12px 0;
+  padding: 12px 14px;
 }
 
 .settings-copy {
@@ -1251,9 +1361,13 @@ function platformLabel(): string {
     font-size: 11px;
   }
 
+  .settings-group {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
   .settings-row {
     flex-wrap: wrap;
-    padding: 8px 0;
   }
 }
 </style>

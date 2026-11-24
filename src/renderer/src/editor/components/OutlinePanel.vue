@@ -96,10 +96,11 @@ defineExpose({ refresh })
         type="button"
         class="outline-item"
         :class="[`level-${item.level}`, { active: index === activeIndex }]"
+        :style="{ '--depth': String(item.level - 1) }"
         :title="outlineLabel(item, t('common.unnamed'))"
         @click="jumpTo(item)"
       >
-        <span class="outline-dot" />
+        <span class="outline-marker"><span class="outline-dot" /></span>
         <span class="outline-text">{{ outlineLabel(item, t('common.unnamed')) }}</span>
       </button>
     </nav>
@@ -110,8 +111,8 @@ defineExpose({ refresh })
 <style scoped>
 .outline-panel {
   display: flex;
-  width: 208px;
-  flex: 0 0 208px;
+  width: 264px;
+  flex: 0 0 264px;
   flex-direction: column;
   min-height: 0;
   border-left: 1px solid var(--divider-soft);
@@ -168,7 +169,7 @@ defineExpose({ refresh })
   display: flex;
   align-items: center;
   gap: 7px;
-  padding: 5px 8px;
+  padding: 5px 8px 5px calc(8px + var(--depth, 0) * 13px);
   border: 0;
   border-radius: 7px;
   background: transparent;
@@ -184,34 +185,73 @@ defineExpose({ refresh })
   color: var(--text-primary);
 }
 
+.outline-item.level-1 {
+  font-size: 12px;
+  font-weight: 640;
+  color: var(--text-primary);
+}
+
+.outline-item.level-2 {
+  font-size: 11.5px;
+}
+
+.outline-item.level-3 {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.outline-item.level-4 {
+  font-size: 10.5px;
+  color: var(--text-secondary);
+}
+
+.outline-item.level-5 {
+  font-size: 10.5px;
+  color: var(--text-row);
+}
+
+.outline-item.level-6 {
+  font-size: 10px;
+  color: var(--text-row);
+}
+
 .outline-item.active {
   background: var(--accent-faint);
   color: var(--accent-strong);
   font-weight: 620;
 }
 
-.outline-item.level-2 {
-  padding-left: 18px;
-  font-size: 11px;
-}
-
-.outline-item.level-3 {
-  padding-left: 28px;
-  font-size: 10.5px;
-  color: var(--text-secondary);
+.outline-marker {
+  display: grid;
+  width: 10px;
+  flex: 0 0 10px;
+  place-items: center;
 }
 
 .outline-dot {
   width: 4px;
   height: 4px;
-  flex: 0 0 auto;
   border-radius: 50%;
   background: currentColor;
   opacity: 0.45;
 }
 
 .outline-item.level-1 .outline-dot {
-  opacity: 0.85;
+  width: 6px;
+  height: 6px;
+  opacity: 0.9;
+}
+
+.outline-item.level-4 .outline-dot,
+.outline-item.level-5 .outline-dot,
+.outline-item.level-6 .outline-dot {
+  width: 3px;
+  height: 3px;
+  opacity: 0.4;
+}
+
+.outline-item.level-3 .outline-dot {
+  opacity: 0.55;
 }
 
 .outline-text {

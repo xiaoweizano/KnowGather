@@ -15,6 +15,9 @@ describe('slash menu model', () => {
       'heading1',
       'heading2',
       'heading3',
+      'heading4',
+      'heading5',
+      'heading6',
     ])
     expect(filterSlashMenuItems('task').map((item) => item.key)).toContain('taskList')
   })

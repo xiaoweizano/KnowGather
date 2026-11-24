@@ -12,21 +12,27 @@ import {
   type TiptapDocument,
   type TiptapNode,
 } from '../../../shared/document'
+import { dayKeyToLocalNoonIso, type ActivityPayload } from '../../../shared/settings'
 import { getShizhiApi } from '../services/api'
 import { AutoSaveController, type AutoSaveState } from '../services/autosave'
 import { dataUrlToBytes, htmlToDocument, isDocumentEmpty } from '../services/importService'
+import { journalForDay, journalTitleForDate } from '../app/journalView'
 import { translate } from '../i18n'
 
 export interface CreateDocumentInput {
   title?: string
   categoryId?: string | null
   content?: TiptapDocument
+  /** Set when the document is a copy of a journal entry. */
+  sourceJournalId?: string | null
 }
 
 export interface CreateJournalInput {
   title?: string
   categoryId?: string | null
   content?: TiptapDocument
+  /** Local `YYYY-MM-DD`; imported entries keep the day they were written on. */
+  createdDate?: string | null
 }
 
 export interface ImportIssue {
@@ -44,6 +50,8 @@ export interface ImportOutcome {
   skipped: ImportIssue[]
   /** Documents that parsed but produced no content and were not imported. */
   empty: string[]
+  /** How many of the created documents were filed under a past date. */
+  dated: number
   canceled: boolean
 }
 
@@ -67,6 +75,10 @@ export const useDocumentStore = defineStore('document', () => {
   const error = ref<string | null>(null)
   const saveState = ref<AutoSaveState>(idleSaveState())
   const journalSaveState = ref<AutoSaveState>(idleSaveState())
+  // Editing activity is written by the main process on save, so the renderer
+  // refetches it after writes instead of deriving it locally.
+  const activity = ref<ActivityPayload>({ days: {}, seeded: false })
+  const activityLoaded = ref(false)
   const editorInstanceId = ref<string | null>(null)
   const saveController = shallowRef<AutoSaveController<DocumentSavePayload> | null>(null)
   const journalSaveController = shallowRef<AutoSaveController<JournalRecord> | null>(null)
@@ -138,6 +150,20 @@ export const useDocumentStore = defineStore('document', () => {
     }
   }
 
+  /**
+   * Refetches the activity payload the heatmaps render. Saves are recorded by
+   * the main process, so the renderer asks again after writes that change it.
+   */
+  async function refreshActivity(): Promise<void> {
+    try {
+      activity.value = await api.activity.list()
+    } catch {
+      // A decorative read: failing it must not break the page.
+    } finally {
+      activityLoaded.value = true
+    }
+  }
+
   async function selectDocument(id: string): Promise<void> {
     if (current.value?.id === id) return
     if (!(await saveNow())) return
@@ -158,6 +184,7 @@ export const useDocumentStore = defineStore('document', () => {
       title: input.title?.trim() || '无标题文档',
       categoryId: input.categoryId ?? null,
       content: input.content ?? EMPTY_DOCUMENT,
+      sourceJournalId: input.sourceJournalId ?? null,
     })
     try {
       const receipt = await api.documents.save(toSavePayload(record))
@@ -286,7 +313,7 @@ export const useDocumentStore = defineStore('document', () => {
 
   async function patchJournal(
     id: string,
-    patch: Partial<Pick<JournalRecord, 'title' | 'categoryId'>>,
+    patch: Partial<Pick<JournalRecord, 'title' | 'categoryId' | 'documentId'>>,
     errorLabel: string,
   ): Promise<boolean> {
     const isCurrent = id === currentJournal.value?.id
@@ -336,7 +363,6 @@ export const useDocumentStore = defineStore('document', () => {
       return false
     }
   }
-
   async function createCategory(name: string): Promise<CategoryRecord | null> {
     try {
       const category = await api.categories.save({ name })
@@ -400,10 +426,23 @@ export const useDocumentStore = defineStore('document', () => {
       createdAt: now,
       updatedAt: now,
       deletedAt: null,
+      documentId: null,
     }
+    // The hint is only honoured on the first save; the repository stamps the
+    // present once the record exists.
+    const createdAt = input.createdDate ? dayKeyToLocalNoonIso(input.createdDate) : null
     try {
-      const receipt = await api.journals.save(record)
-      const saved = { ...record, revision: receipt.revision, version: receipt.version, updatedAt: receipt.savedAt }
+      const receipt = await api.journals.save({
+        ...toJournalSavePayload(record),
+        ...(createdAt ? { createdAt } : {}),
+      })
+      const saved = {
+        ...record,
+        revision: receipt.revision,
+        version: receipt.version,
+        createdAt: receipt.savedAt,
+        updatedAt: receipt.savedAt,
+      }
       journals.value = sortByUpdatedAt([...journals.value, saved])
       error.value = null
       return saved
@@ -411,6 +450,20 @@ export const useDocumentStore = defineStore('document', () => {
       error.value = message(cause, '新建日志失败')
       return null
     }
+  }
+
+  /**
+   * Opens the entry written on a local calendar day, creating a backdated one
+   * when the day has no entry yet. Missing days are created on demand so a
+   * heatmap cell can be filled in after the fact.
+   */
+  async function openJournalForDay(dayKey: string, options: { create?: boolean } = {}): Promise<boolean> {
+    const existing = journalForDay(journals.value, dayKey)
+    if (existing) return selectJournal(existing.id)
+    if (options.create === false) return false
+    const created = await createJournal({ createdDate: dayKey, title: journalTitleForDate(dayKey) })
+    if (!created) return false
+    return selectJournal(created.id)
   }
 
   async function selectJournal(id: string): Promise<boolean> {
@@ -494,18 +547,121 @@ export const useDocumentStore = defineStore('document', () => {
   }
 
   /**
-   * Imports files through the preload bridge and writes them as documents.
+   * Copies a journal into the library as a document and links the two.
    *
-   * `merge` appends everything into the current document; otherwise each file
-   * becomes its own document. Failures are collected per file so one bad file
-   * does not abort the batch.
+   * Syncing is a one-time copy: the document keeps its own tags and favorite and
+   * is edited independently afterwards. Syncing the same journal again updates
+   * the same document with the journal's latest content, so the link stays the
+   * anchor rather than piling up duplicates.
+   */
+  async function promoteJournalToDocument(
+    journalId: string,
+    input: { title?: string; categoryId?: string | null } = {},
+  ): Promise<DocumentRecord | null> {
+    const isCurrent = currentJournal.value?.id === journalId
+    if (isCurrent && !(await saveJournalNow())) return null
+
+    const journal = isCurrent
+      ? currentJournal.value
+      : journals.value.find((entry) => entry.id === journalId) ?? await api.journals.get(journalId)
+    if (!journal) {
+      error.value = '日志不存在或已被删除'
+      return null
+    }
+
+    const title = input.title?.trim() || journal.title
+    const categoryId = input.categoryId === undefined ? journal.categoryId : input.categoryId
+
+    const linked = journal.documentId
+      ? documents.value.find((document) => document.id === journal.documentId) ?? await api.documents.get(journal.documentId)
+      : null
+
+    const document = linked
+      ? await replaceDocumentContent(linked, title, categoryId, journal.content)
+      : await createDocument({ title, categoryId, content: journal.content, sourceJournalId: journal.id })
+    if (!document) return null
+
+    if (journal.documentId !== document.id || journal.title !== title) {
+      const ok = await patchJournal(journal.id, { documentId: document.id, title }, '同步到知识库失败')
+      if (!ok) return null
+    }
+    await refreshActivity()
+    return document
+  }
+
+  /** Rewrites an existing document's content after a re-sync, keeping its tags. */
+  async function replaceDocumentContent(
+    target: DocumentRecord,
+    title: string,
+    categoryId: string | null,
+    content: TiptapDocument,
+  ): Promise<DocumentRecord | null> {
+    if (target.id === current.value?.id && !(await saveNow())) return null
+    // Read back the revision the save just wrote: a stale snapshot would be
+    // rejected by the repository's out-of-order guard. Non-current documents
+    // are re-read for the same reason `patchDocument` does it.
+    const fresh = target.id === current.value?.id
+      ? current.value
+      : await api.documents.get(target.id) ?? target
+    if (!fresh) {
+      error.value = '文档不存在或已被删除'
+      return null
+    }
+    const updated: DocumentRecord = {
+      ...fresh,
+      title: title.trim() || fresh.title,
+      categoryId,
+      content: cloneDocumentJson(content),
+      revision: fresh.revision + 1,
+      updatedAt: new Date().toISOString(),
+      sourceJournalId: fresh.sourceJournalId ?? null,
+    }
+    try {
+      const receipt = await api.documents.save(toSavePayload(updated))
+      if (receipt.revision !== updated.revision) {
+        error.value = '文档已在别处更新，请重试'
+        return null
+      }
+      const saved = { ...updated, revision: receipt.revision, version: receipt.version, updatedAt: receipt.savedAt }
+      documents.value = sortByUpdatedAt(documents.value.map((document) => document.id === saved.id ? saved : document))
+      if (current.value?.id === saved.id) {
+        current.value = saved
+        saveState.value = savedStateFor(receipt.revision, receipt.version, receipt.savedAt)
+      }
+      error.value = null
+      return saved
+    } catch (cause) {
+      error.value = message(cause, '同步到知识库失败')
+      return null
+    }
+  }
+
+  /** Promotes a journal from the library side and opens the resulting document. */
+  async function createDocumentFromJournal(input: { journalId: string; title: string; categoryId: string | null }): Promise<DocumentRecord | null> {
+    const document = await promoteJournalToDocument(input.journalId, {
+      title: input.title,
+      categoryId: input.categoryId,
+    })
+    if (!document) return null
+    await selectDocument(document.id)
+    return document
+  }
+
+  /**
+   * Imports files through the preload bridge and writes them as journal entries.
+   *
+   * Journals are the day-to-day surface, so imported history lands there, filed
+   * under the date inferred from its file name or folder. `merge` appends
+   * everything into the open document instead; it only makes sense from the
+   * library, where a document is open. Failures are collected per file so one
+   * bad file does not abort the batch.
    */
   async function importDocuments(options: {
     mode: 'files' | 'folder' | 'archive'
     categoryId: string | null
     merge: boolean
   }): Promise<ImportOutcome> {
-    const outcome: ImportOutcome = { created: 0, failed: [], skipped: [], empty: [], canceled: false }
+    const outcome: ImportOutcome = { created: 0, failed: [], skipped: [], empty: [], dated: 0, canceled: false }
 
     let preview
     try {
@@ -524,7 +680,7 @@ export const useDocumentStore = defineStore('document', () => {
     outcome.failed.push(...preview.failures)
     outcome.skipped.push(...preview.skipped)
 
-    const prepared: Array<{ title: string; content: TiptapDocument; sourceLabel: string }> = []
+    const prepared: Array<{ title: string; content: TiptapDocument; sourceLabel: string; date: string | null }> = []
     for (const document of preview.documents) {
       try {
         const { document: content, embeddedImages } = htmlToDocument(document.html)
@@ -533,7 +689,7 @@ export const useDocumentStore = defineStore('document', () => {
           outcome.empty.push(document.sourceLabel)
           continue
         }
-        prepared.push({ title: document.title, content: hydrated, sourceLabel: document.sourceLabel })
+        prepared.push({ title: document.title, content: hydrated, sourceLabel: document.sourceLabel, date: document.date })
       } catch (cause) {
         outcome.failed.push({ sourceLabel: document.sourceLabel, reason: message(cause, '内容解析失败'), code: 'parseFailed' })
       }
@@ -554,34 +710,49 @@ export const useDocumentStore = defineStore('document', () => {
       return outcome
     }
 
-    if (!(await saveNow())) {
-      outcome.failed.push({ sourceLabel: translate('import.source.import'), reason: '当前文档尚未保存，请稍后重试', code: 'documentUnsaved' })
+    if (!(await saveJournalNow())) {
+      outcome.failed.push({ sourceLabel: translate('import.source.import'), reason: '当前日志尚未保存，请稍后重试', code: 'documentUnsaved' })
       return outcome
     }
 
-    const created: DocumentRecord[] = []
+    const created: JournalRecord[] = []
     for (const item of prepared) {
-      const record = createDocumentRecord({
+      const occurrence = item.date ? dayKeyToLocalNoonIso(item.date) : null
+      const record: JournalRecord = {
         id: crypto.randomUUID(),
-        title: item.title,
-        categoryId: options.categoryId,
-        content: item.content,
-      })
+        title: item.title.trim() || '无标题日志',
+        content: cloneDocumentJson(item.content),
+        categoryId: null,
+        revision: 0,
+        version: 1,
+        createdAt: occurrence ?? new Date().toISOString(),
+        updatedAt: occurrence ?? new Date().toISOString(),
+        deletedAt: null,
+        documentId: null,
+      }
       try {
-        const receipt = await api.documents.save(toSavePayload(record))
-        created.push({ ...record, revision: receipt.revision, version: receipt.version, updatedAt: receipt.savedAt })
+        const receipt = await api.journals.save({
+          ...toJournalSavePayload(record),
+          ...(occurrence ? { createdAt: occurrence } : {}),
+        })
+        created.push({
+          ...record,
+          revision: receipt.revision,
+          version: receipt.version,
+          createdAt: receipt.savedAt,
+          updatedAt: receipt.savedAt,
+        })
         outcome.created += 1
+        if (item.date) outcome.dated += 1
       } catch (cause) {
         outcome.failed.push({ sourceLabel: item.sourceLabel, reason: message(cause, '保存失败'), code: 'saveFailed' })
       }
     }
 
     if (created.length) {
-      documents.value = sortByUpdatedAt([...documents.value, ...created])
-      current.value = created[0]!
-      const first = created[0]!
-      saveState.value = savedStateFor(first.revision, first.version, first.updatedAt)
+      journals.value = sortByUpdatedAt([...journals.value, ...created])
       error.value = null
+      await refreshActivity()
     }
 
     return outcome
@@ -736,6 +907,9 @@ export const useDocumentStore = defineStore('document', () => {
     currentJournal,
     loading,
     error,
+    activity,
+    activityLoaded,
+    refreshActivity,
     saveState,
     journalSaveState,
     editorInstanceId,
@@ -755,8 +929,11 @@ export const useDocumentStore = defineStore('document', () => {
     deleteCategory,
     createJournal,
     selectJournal,
+    openJournalForDay,
     closeJournal,
     deleteJournal,
+    promoteJournalToDocument,
+    createDocumentFromJournal,
     updateContent,
     updateTitle,
     updateTags,
@@ -785,6 +962,9 @@ function toSavePayload(document: DocumentRecord): DocumentSavePayload {
     content: cloneDocumentJson(document.content),
     revision: document.revision,
     version: document.version,
+    // Honoured only for the first save; the repository ignores it afterwards.
+    createdAt: document.createdAt,
+    sourceJournalId: document.sourceJournalId ?? null,
   }
 }
 
@@ -802,6 +982,9 @@ function toJournalSavePayload(journal: JournalRecord): JournalSavePayload {
     categoryId: journal.categoryId,
     revision: journal.revision,
     version: journal.version,
+    // Honoured only for the first save; ignored once the record exists.
+    createdAt: journal.createdAt,
+    documentId: journal.documentId ?? null,
   }
 }
 

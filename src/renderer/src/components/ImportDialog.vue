@@ -10,6 +10,13 @@ const props = defineProps<{
   categories: readonly CategoryRecord[]
   defaultCategoryId: string | null
   busy: boolean
+  /**
+   * Imports land in the journal, where merge and category do not apply. The
+   * library's import entry keeps both because it appends into the open document
+   * or files the result straight into a category.
+   */
+  allowMerge?: boolean
+  allowCategory?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -67,7 +74,11 @@ function categoryLabel(id: string | null): string {
 function submit(): void {
   if (props.busy) return
   result.value = null
-  emit('submit', { mode: mode.value, categoryId: categoryId.value, merge: merge.value })
+  emit('submit', {
+    mode: mode.value,
+    categoryId: props.allowCategory === false ? null : categoryId.value,
+    merge: props.allowMerge === false ? false : merge.value,
+  })
 }
 
 function showResult(outcome: ImportOutcome): void {
@@ -129,7 +140,7 @@ defineExpose({ showResult })
               </button>
             </div>
 
-            <div class="import-field">
+            <div v-if="props.allowCategory !== false" class="import-field">
               <label for="import-category">{{ t('import.categoryLabel') }}</label>
               <select id="import-category" v-model="categoryId" :disabled="props.busy || merge">
                 <option :value="null">{{ t('import.categoryUncategorized') }}</option>
@@ -139,7 +150,7 @@ defineExpose({ showResult })
               </select>
             </div>
 
-            <label class="import-checkbox" :class="{ disabled: props.busy }">
+            <label v-if="props.allowMerge !== false" class="import-checkbox" :class="{ disabled: props.busy }">
               <input v-model="merge" type="checkbox" :disabled="props.busy" />
               <span>
                 {{ t('import.merge') }}
@@ -166,7 +177,9 @@ defineExpose({ showResult })
               <strong v-else-if="failureCount > 0">{{ t('import.result.none') }}</strong>
               <strong v-else>{{ t('import.result.none') }}</strong>
               <span v-if="merge">{{ t('import.merged') }}</span>
-              <span v-else-if="successCount > 0">{{ t('import.savedTo', { name: categoryLabel(categoryId) }) }}</span>
+              <span v-else-if="successCount > 0 && props.allowCategory !== false">{{ t('import.savedTo', { name: categoryLabel(categoryId) }) }}</span>
+              <span v-else-if="successCount > 0">{{ t('import.result.savedToJournal') }}</span>
+              <span v-if="result?.dated">{{ t('import.result.dated', { count: result.dated }) }}</span>
             </div>
 
             <div v-if="result?.failed.length" class="import-issues">

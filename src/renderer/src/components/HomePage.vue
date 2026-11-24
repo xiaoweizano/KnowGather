@@ -7,15 +7,13 @@ import { useDocumentStore } from '../stores/document'
 import { useUiStore } from '../stores/ui'
 import { useI18n } from '../i18n/useI18n'
 import { formatKnowledgeUpdatedAt } from '../app/knowledgeView'
-import { countJournalsForLocalDate } from '../app/knowledgeNavigation'
-import { formatJournalDate } from '../app/journalView'
-import { getShizhiApi } from '../services/api'
-import type { ActivityPayload } from '../../../shared/settings'
+import { countJournalsForLocalDate, journalDaysSet, todayDayKey } from '../app/knowledgeNavigation'
+import { formatJournalDay } from '../app/journalView'
 
 const emit = defineEmits<{
   openDocument: [id: string]
   openJournal: [id: string]
-  createDocument: []
+  openJournalDay: [dayKey: string]
   importDocuments: []
   goToLibrary: []
   goToJournal: []
@@ -24,10 +22,9 @@ const emit = defineEmits<{
 const documentStore = useDocumentStore()
 const ui = useUiStore()
 const { t, locale } = useI18n()
-const api = getShizhiApi()
 
-const activity = ref<ActivityPayload>({ days: {}, seeded: false })
-const activityLoaded = ref(false)
+const activity = computed(() => documentStore.activity)
+const activityLoaded = computed(() => documentStore.activityLoaded)
 const greetingIndex = ref(0)
 
 const recentDocuments = computed(() => [...documentStore.documents]
@@ -39,6 +36,8 @@ const favoriteDocuments = computed(() => documentStore.documents.filter((documen
 const isEmpty = computed(() =>
   documentStore.documents.length === 0 && documentStore.journals.length === 0 && documentStore.categories.length === 0)
 
+const journalDays = computed(() => journalDaysSet(documentStore.journals))
+
 const companionTip = computed(() => {
   const tips = [t('home.mascot.tip1'), t('home.mascot.tip2'), t('home.mascot.tip3')]
   return tips[greetingIndex.value % tips.length]
@@ -48,18 +47,18 @@ const mascotMessage = computed(() => todayCount.value > 0
   ? t('home.mascot.todayOne', { count: todayCount.value })
   : t('home.mascot.todayNone'))
 
-onMounted(async () => {
-  try {
-    activity.value = await api.activity.list()
-  } catch {
-    // The heatmap is decorative; a failed read must not break the home page.
-  } finally {
-    activityLoaded.value = true
-  }
+onMounted(() => {
+  // Shared with the journal page; a failed read only leaves the heatmap empty.
+  void documentStore.refreshActivity()
 })
 
 function cycleGreeting(): void {
   greetingIndex.value += 1
+}
+
+/** The home page is about today, so its primary action writes today's entry. */
+function writeToday(): void {
+  emit('openJournalDay', todayDayKey())
 }
 
 function updatedAt(value: string): string {
@@ -67,7 +66,8 @@ function updatedAt(value: string): string {
 }
 
 function journalDate(value: string): string {
-  return formatJournalDate(value, locale.value)
+  // Entries belong to the day they were written, not the last edit.
+  return formatJournalDay(value, locale.value)
 }
 </script>
 
@@ -79,8 +79,8 @@ function journalDate(value: string): string {
         <h1 id="home-heading">{{ t('home.heading') }}</h1>
         <p>{{ t('home.subtitle') }}</p>
         <div class="home-actions">
-          <button type="button" class="home-primary" @click="emit('createDocument')">
-            <AppIcon name="filePlus" :size="16" /> {{ t('home.newDocument') }}
+          <button type="button" class="home-primary" @click="writeToday">
+            <AppIcon name="journal" :size="16" /> {{ t('home.writeJournal') }}
           </button>
           <button type="button" class="home-secondary" @click="emit('importDocuments')">
             <AppIcon name="attachment" :size="16" /> {{ t('home.importDocuments') }}
@@ -127,7 +127,13 @@ function journalDate(value: string): string {
     </div>
 
     <template v-else>
-      <ActivityHeatmap v-if="activityLoaded" class="home-heatmap" :days="activity.days" />
+      <ActivityHeatmap
+        v-if="activityLoaded"
+        class="home-heatmap"
+        :days="activity.days"
+        :journal-days="journalDays"
+        @select-day="emit('openJournalDay', $event)"
+      />
 
       <div class="home-columns">
         <section class="home-column" aria-labelledby="home-recent-heading">
@@ -160,7 +166,7 @@ function journalDate(value: string): string {
                 <span class="home-entry-icon journal"><AppIcon name="journal" :size="16" /></span>
                 <span class="home-entry-copy">
                   <strong>{{ journal.title }}</strong>
-                  <small>{{ journalDate(journal.updatedAt) }}</small>
+                  <small>{{ journalDate(journal.createdAt) }}</small>
                 </span>
               </button>
             </li>

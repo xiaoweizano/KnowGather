@@ -50,7 +50,10 @@ export function registerIpcHandlers(
   ipcMain.handle(IPC_CHANNELS.documentsSave, async (_event, payload) => {
     const validated = validateDocumentSavePayload(payload)
     const receipt = await repository.save(validated)
-    void activity?.record({ kind: 'document', characters: countCharacters(validated.content) })
+    // An imported file carries the date it was written on; that save counts on
+    // its own day rather than today. Later edits always count today.
+    const when = receipt.created ? new Date(receipt.savedAt) : new Date()
+    void activity?.record({ kind: 'document', characters: countCharacters(validated.content), now: when })
     return receipt
   })
   ipcMain.handle(IPC_CHANNELS.documentsRemove, (_event, id) => repository.remove(assertString(id)))
@@ -69,8 +72,17 @@ export function registerIpcHandlers(
   )
   ipcMain.handle(IPC_CHANNELS.journalsSave, async (_event, payload) => {
     const validated = validateJournalSavePayload(payload)
+    // Metadata patches (rename, link, category) send the whole record; only a
+    // new entry or actual content change counts as an edit on the heatmap.
+    const previous = await repository.getJournal(validated.id)
     const receipt = await repository.saveJournal(validated)
-    void activity?.record({ kind: 'journal', characters: countCharacters(validated.content) })
+    const contentChanged = !previous || JSON.stringify(previous.content) !== JSON.stringify(validated.content)
+    if (receipt.created || contentChanged) {
+      // An imported journal carries the day it was written on, so its activity
+      // belongs to that day rather than today.
+      const when = receipt.created ? new Date(receipt.savedAt) : new Date()
+      void activity?.record({ kind: 'journal', characters: countCharacters(validated.content), now: when })
+    }
     return receipt
   })
   ipcMain.handle(IPC_CHANNELS.journalsRemove, (_event, id) =>
@@ -119,6 +131,7 @@ export function registerIpcHandlers(
         html: document.html,
         format: document.format,
         sourceLabel: document.sourceLabel,
+        date: document.date,
         encoding: document.encoding,
         warnings: document.warnings,
       })),

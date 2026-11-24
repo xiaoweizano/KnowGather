@@ -81,6 +81,12 @@ describe('knowledge view data', () => {
     expect(formatKnowledgeUpdatedAt('invalid', now)).toBe('时间未知')
   })
 
+  it('includes the year for dates from another year', () => {
+    const now = new Date(2026, 10, 13, 10, 0)
+    expect(formatKnowledgeUpdatedAt(new Date(2024, 4, 20, 12).toISOString(), now)).toBe('2024年05月20日')
+    expect(formatKnowledgeUpdatedAt(new Date(2024, 4, 20, 12).toISOString(), now, 'en-US')).toBe('2024/05/20')
+  })
+
   it('formats dates in English when that locale is requested', () => {
     const now = new Date(2026, 10, 13, 10, 0)
     expect(formatKnowledgeUpdatedAt(new Date(2026, 10, 13, 9, 5).toISOString(), now, 'en-US')).toMatch(/^Today /)

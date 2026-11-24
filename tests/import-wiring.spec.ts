@@ -36,16 +36,15 @@ describe('import wiring', () => {
     expect(dialog).toContain(':disabled="props.busy || merge"')
   })
 
-  it('keeps the import entry reachable from the sidebar, the empty state and home', () => {
-    const sidebar = source('../src/renderer/src/components/ResourceSidebar.vue')
+  it('keeps the import entry reachable from the journal page and home', () => {
+    const journal = source('../src/renderer/src/components/JournalPage.vue')
     const page = source('../src/renderer/src/app/DocumentEditorPage.vue')
     const home = source('../src/renderer/src/components/HomePage.vue')
 
-    expect(sidebar).toContain("emit('importDocuments')")
-    // Labels now come from the i18n dictionary, so the wiring test asserts the
-    // key and the handler instead of the literal Chinese string.
-    expect(sidebar).toContain("t('library.importTitle')")
-    expect(page).toContain('@import-documents="openImportDialog($event ?? null)"')
+    // Imports are journal history now, so the journal page owns the entry point.
+    expect(journal).toContain("emit('importHistory')")
+    expect(journal).toContain("t('journal.importHistory')")
+    expect(page).toContain('@import-history="openImportDialog(null)"')
     expect(page).toContain('<ImportDialog')
     expect(home).toContain("t('home.importDocuments')")
   })
@@ -57,9 +56,10 @@ describe('import wiring', () => {
     expect(store).toContain("api.imports.pick({ mode: options.mode })")
     expect(store).toContain('htmlToDocument(document.html)')
     expect(store).toContain('mergeIntoCurrent')
-    // Each imported file is persisted individually so one failure does not
-    // discard the rest of the batch.
-    expect(store).toContain('api.documents.save(toSavePayload(record))')
+    // Imports are journal history: each file is persisted individually as a
+    // journal entry so one failure does not discard the rest of the batch.
+    expect(store).toContain('const receipt = await api.journals.save({')
+    expect(store).toContain('journals.value = sortByUpdatedAt([...journals.value, ...created])')
   })
 
   it('honours the injected test path hook only when explicitly configured', () => {

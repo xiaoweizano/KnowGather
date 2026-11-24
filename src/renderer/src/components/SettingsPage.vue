@@ -31,14 +31,16 @@ const api = getShizhiApi()
 
 type Section = 'general' | 'editor' | 'appearance' | 'shortcuts' | 'data' | 'about'
 const section = ref<Section>('general')
-const sections: ReadonlyArray<{ id: Section; labelKey: string; icon: string }> = [
-  { id: 'general', labelKey: 'settings.nav.general', icon: 'settings' },
-  { id: 'editor', labelKey: 'settings.nav.editor', icon: 'edit' },
-  { id: 'appearance', labelKey: 'settings.nav.appearance', icon: 'palette' },
-  { id: 'shortcuts', labelKey: 'settings.nav.shortcuts', icon: 'keyboard' },
-  { id: 'data', labelKey: 'settings.nav.data', icon: 'library' },
-  { id: 'about', labelKey: 'settings.nav.about', icon: 'info' },
+const sections: ReadonlyArray<{ id: Section; labelKey: string; hintKey: string; icon: string }> = [
+  { id: 'general', labelKey: 'settings.nav.general', hintKey: 'settings.navHint.general', icon: 'settings' },
+  { id: 'editor', labelKey: 'settings.nav.editor', hintKey: 'settings.navHint.editor', icon: 'edit' },
+  { id: 'appearance', labelKey: 'settings.nav.appearance', hintKey: 'settings.navHint.appearance', icon: 'palette' },
+  { id: 'shortcuts', labelKey: 'settings.nav.shortcuts', hintKey: 'settings.navHint.shortcuts', icon: 'keyboard' },
+  { id: 'data', labelKey: 'settings.nav.data', hintKey: 'settings.navHint.data', icon: 'library' },
+  { id: 'about', labelKey: 'settings.nav.about', hintKey: 'settings.navHint.about', icon: 'info' },
 ]
+
+const activeEntry = computed(() => sections.find((entry) => entry.id === section.value) ?? sections[0])
 
 const shortcuts = ref<ShortcutMap>(defaultShortcuts())
 const capturing = ref<AppCommandId | null>(null)
@@ -226,38 +228,39 @@ function platformLabel(): string {
 
 <template>
   <section class="settings-page" tabindex="-1" @keydown="handleCapture">
-    <header class="settings-header">
-      <div>
-        <span class="settings-eyebrow">SETTINGS</span>
-        <h1>{{ t('settings.title') }}</h1>
-        <p>{{ t('settings.subtitle') }}</p>
-      </div>
-    </header>
+    <nav class="settings-nav" :aria-label="t('settings.title')">
+      <div class="settings-nav-label">{{ t('settings.title') }}</div>
+      <button
+        v-for="entry in sections"
+        :key="entry.id"
+        type="button"
+        class="settings-nav-item"
+        :class="{ active: section === entry.id }"
+        :data-settings-section="entry.id"
+        @click="section = entry.id"
+      >
+        <span class="nav-icon"><AppIcon :name="entry.icon" :size="14" /></span>
+        <span class="nav-copy">
+          <strong>{{ t(entry.labelKey) }}</strong>
+          <small>{{ t(entry.hintKey) }}</small>
+        </span>
+      </button>
+    </nav>
 
     <div class="settings-body">
-      <nav class="settings-nav" :aria-label="t('settings.title')">
-        <button
-          v-for="entry in sections"
-          :key="entry.id"
-          type="button"
-          class="settings-nav-item"
-          :class="{ active: section === entry.id }"
-          :data-settings-section="entry.id"
-          @click="section = entry.id"
-        >
-          <AppIcon :name="entry.icon" :size="16" />
-          <span>{{ t(entry.labelKey) }}</span>
-        </button>
-      </nav>
+      <header class="settings-header">
+        <h1>{{ t(activeEntry.labelKey) }}</h1>
+        <span class="header-dot" />
+        <p>{{ t(activeEntry.hintKey) }}</p>
+      </header>
 
       <div class="settings-content">
         <!-- ------------------------------------------------------------ general -->
-        <section v-if="section === 'general'" class="settings-group" :aria-label="t('settings.section.general')">
-          <h2>{{ t('settings.section.general') }}</h2>
+        <section v-if="section === 'general'" class="settings-panel" :aria-label="t('settings.section.general')">
 
-          <div class="settings-card">
-            <h3 class="settings-card-title">{{ t('settings.card.startup') }}</h3>
-            <div class="settings-card-body">
+          <div class="settings-sect">
+            <div class="sect-head"><h2>{{ t('settings.card.startup') }}</h2></div>
+            <div class="sect-rows">
               <div class="settings-row">
                 <div class="settings-copy">
                   <strong>{{ t('settings.language') }}</strong>
@@ -351,9 +354,9 @@ function platformLabel(): string {
             </div>
           </div>
 
-          <div class="settings-card">
-            <h3 class="settings-card-title">{{ t('settings.card.updates') }}</h3>
-            <div class="settings-card-body">
+          <div class="settings-sect">
+            <div class="sect-head"><h2>{{ t('settings.card.updates') }}</h2></div>
+            <div class="sect-rows">
               <div class="settings-row">
                 <div class="settings-copy">
                   <strong>{{ t('settings.autoUpdate') }}</strong>
@@ -402,12 +405,11 @@ function platformLabel(): string {
         </section>
 
         <!-- ------------------------------------------------------------- editor -->
-        <section v-if="section === 'editor'" class="settings-group" :aria-label="t('settings.section.editor')">
-          <h2>{{ t('settings.section.editor') }}</h2>
+        <section v-if="section === 'editor'" class="settings-panel" :aria-label="t('settings.section.editor')">
 
-          <div class="settings-card">
-            <h3 class="settings-card-title">{{ t('settings.card.editing') }}</h3>
-            <div class="settings-card-body">
+          <div class="settings-sect">
+            <div class="sect-head"><h2>{{ t('settings.card.editing') }}</h2></div>
+            <div class="sect-rows">
               <div v-for="option in [
                 { key: 'outline', label: 'settings.outline', hint: 'settings.outlineHint', get: ui.outlineVisible, set: ui.setOutlineVisible },
                 { key: 'fold', label: 'settings.foldHeadings', hint: 'settings.foldHeadingsHint', get: ui.foldHeadings, set: ui.setFoldHeadings },
@@ -431,9 +433,9 @@ function platformLabel(): string {
             </div>
           </div>
 
-          <div class="settings-card">
-            <h3 class="settings-card-title">{{ t('settings.card.typography') }}</h3>
-            <div class="settings-card-body">
+          <div class="settings-sect">
+            <div class="sect-head"><h2>{{ t('settings.card.typography') }}</h2></div>
+            <div class="sect-rows">
               <div class="settings-row">
                 <div class="settings-copy">
                   <strong>{{ t('settings.lineHeight') }}</strong>
@@ -477,12 +479,11 @@ function platformLabel(): string {
         </section>
 
         <!-- --------------------------------------------------------- appearance -->
-        <section v-if="section === 'appearance'" class="settings-group" :aria-label="t('settings.section.appearance')">
-          <h2>{{ t('settings.section.appearance') }}</h2>
+        <section v-if="section === 'appearance'" class="settings-panel" :aria-label="t('settings.section.appearance')">
 
-          <div class="settings-card">
-            <h3 class="settings-card-title">{{ t('settings.card.display') }}</h3>
-            <div class="settings-card-body">
+          <div class="settings-sect">
+            <div class="sect-head"><h2>{{ t('settings.card.display') }}</h2></div>
+            <div class="sect-rows">
               <div class="settings-row">
                 <div class="settings-copy">
                   <strong>{{ t('settings.theme') }}</strong>
@@ -541,9 +542,9 @@ function platformLabel(): string {
             </div>
           </div>
 
-          <div class="settings-card">
-            <h3 class="settings-card-title">{{ t('settings.card.typography') }}</h3>
-            <div class="settings-card-body">
+          <div class="settings-sect">
+            <div class="sect-head"><h2>{{ t('settings.card.typography') }}</h2></div>
+            <div class="sect-rows">
               <div class="settings-row">
                 <div class="settings-copy">
                   <strong>{{ t('settings.font.ui') }}</strong>
@@ -581,9 +582,9 @@ function platformLabel(): string {
             </div>
           </div>
 
-          <div class="settings-card">
-            <h3 class="settings-card-title">{{ t('settings.card.extras') }}</h3>
-            <div class="settings-card-body">
+          <div class="settings-sect">
+            <div class="sect-head"><h2>{{ t('settings.card.extras') }}</h2></div>
+            <div class="sect-rows">
               <div class="settings-row">
                 <div class="settings-copy">
                   <strong>{{ t('settings.focusMode') }}</strong>
@@ -652,10 +653,9 @@ function platformLabel(): string {
         </section>
 
         <!-- ---------------------------------------------------------- shortcuts -->
-        <section v-if="section === 'shortcuts'" class="settings-group" :aria-label="t('settings.section.shortcuts')">
-          <h2>{{ t('settings.section.shortcuts') }}</h2>
-          <div class="settings-card settings-card--wide">
-            <div class="settings-card-body">
+        <section v-if="section === 'shortcuts'" class="settings-panel" :aria-label="t('settings.section.shortcuts')">
+          <div class="settings-sect settings-sect--list">
+            <div class="sect-rows">
           <div class="settings-inline spread">
             <input v-model="shortcutQuery" class="settings-input" type="search" :placeholder="t('shortcuts.searchPlaceholder')" />
             <button type="button" class="settings-small" @click="resetAllShortcuts">{{ t('shortcuts.resetAll') }}</button>
@@ -695,11 +695,10 @@ function platformLabel(): string {
         </section>
 
         <!-- --------------------------------------------------------------- data -->
-        <section v-if="section === 'data'" class="settings-group" :aria-label="t('settings.section.data')">
-          <h2>{{ t('settings.section.data') }}</h2>
+        <section v-if="section === 'data'" class="settings-panel" :aria-label="t('settings.section.data')">
 
-          <div class="settings-card settings-card--wide settings-card--list">
-            <div class="settings-card-body">
+          <div class="settings-sect settings-sect--list">
+            <div class="sect-rows">
           <div class="settings-row readonly">
             <div class="settings-copy">
               <strong>{{ t('settings.storage') }}</strong>
@@ -744,20 +743,21 @@ function platformLabel(): string {
         </section>
 
         <!-- -------------------------------------------------------------- about -->
-        <section v-if="section === 'about'" class="settings-group" :aria-label="t('settings.section.about')">
-          <h2>{{ t('settings.section.about') }}</h2>
+        <section v-if="section === 'about'" class="settings-panel" :aria-label="t('settings.section.about')">
 
-          <div class="about-card">
-            <span class="about-mark">{{ t('document.brandLetter') }}</span>
-            <div>
-              <strong>{{ t('settings.aboutName') }}</strong>
-              <small>{{ t('settings.aboutDesc') }}</small>
+          <div class="settings-sect">
+            <div class="about-card">
+              <span class="about-mark">{{ t('document.brandLetter') }}</span>
+              <div>
+                <strong>{{ t('settings.aboutName') }}</strong>
+                <small>{{ t('settings.aboutDesc') }}</small>
+              </div>
+              <span class="settings-value">{{ appInfo?.version ?? '0.1.0' }}</span>
             </div>
-            <span class="settings-value">{{ appInfo?.version ?? '0.1.0' }}</span>
           </div>
 
-          <div class="settings-card settings-card--wide settings-card--list">
-            <div class="settings-card-body">
+          <div class="settings-sect settings-sect--list">
+            <div class="sect-rows">
           <div class="settings-row readonly">
             <div class="settings-copy"><strong>{{ t('settings.platform') }}</strong></div>
             <span class="settings-value">{{ platformLabel() }}</span>
@@ -784,173 +784,187 @@ function platformLabel(): string {
 </template>
 
 <style scoped>
+/* ------------------------------------------------------------------ shell */
+
+/* Settings owns its full pane and splits it into a card rail and a content
+   column. The rail is a list of cards rather than a text list so each section
+   can carry a one-line description of what lives inside it. */
 .settings-page {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  background: var(--panel-strong);
+  outline: none;
+}
+
+.settings-nav {
+  display: flex;
+  width: 236px;
+  flex: 0 0 236px;
+  flex-direction: column;
+  gap: 7px;
+  padding: 20px 14px;
+  overflow-y: auto;
+  border-right: 1px solid var(--border-soft);
+  scrollbar-width: thin;
+}
+
+.settings-nav-label {
+  padding: 0 4px 10px;
+  color: var(--text-hint);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.settings-nav-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 11px;
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  background: var(--panel-strong);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color var(--motion-fast) var(--ease-out), background var(--motion-fast) var(--ease-out);
+}
+
+.nav-icon {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 7px;
+  background: var(--panel-muted);
+  color: var(--text-secondary);
+}
+
+.nav-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+  padding-top: 1px;
+}
+
+.nav-copy strong {
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 580;
+  letter-spacing: -0.005em;
+}
+
+.nav-copy small {
+  color: var(--text-hint);
+  font-size: 9.5px;
+  line-height: 1.45;
+}
+
+.settings-nav-item:hover {
+  border-color: var(--border-strong);
+}
+
+.settings-nav-item.active {
+  border-color: color-mix(in srgb, var(--accent) 34%, var(--border-soft));
+  background: linear-gradient(180deg, var(--accent-faint), var(--panel-strong));
+  box-shadow: 0 3px 12px rgba(121, 105, 232, 0.13);
+}
+
+.settings-nav-item.active .nav-icon {
+  background: var(--accent);
+  color: #fff;
+}
+
+.settings-nav-item.active .nav-copy strong {
+  color: var(--accent-strong);
+  font-weight: 680;
+}
+
+.settings-nav-item.active .nav-copy small {
+  color: var(--text-secondary);
+}
+
+/* ----------------------------------------------------------------- content */
+
+.settings-body {
   display: flex;
   min-width: 0;
   flex: 1;
   flex-direction: column;
   overflow: hidden;
-  background: var(--panel-bg);
-  outline: none;
 }
 
 .settings-header {
+  display: flex;
+  height: 56px;
   flex: 0 0 auto;
-  padding: 26px clamp(20px, 4vw, 48px) 16px;
+  align-items: center;
+  gap: 11px;
+  padding: 0 26px;
   border-bottom: 1px solid var(--border-soft);
 }
 
-.settings-eyebrow {
-  color: var(--accent);
-  font-size: 9px;
-  font-weight: 750;
-  letter-spacing: 0.2em;
+.settings-header h1 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 15.5px;
+  font-weight: 680;
+  letter-spacing: -0.015em;
 }
 
-.settings-header h1 {
-  margin: 5px 0 6px;
-  color: var(--text-primary);
-  font-size: 24px;
+.header-dot {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--border-strong);
 }
 
 .settings-header p {
   margin: 0;
-  color: var(--text-secondary);
+  color: var(--text-hint);
   font-size: 11px;
-}
-
-.settings-body {
-  display: flex;
-  min-height: 0;
-  flex: 1;
-}
-
-.settings-nav {
-  display: flex;
-  width: 176px;
-  flex: 0 0 176px;
-  flex-direction: column;
-  gap: 2px;
-  padding: 14px 10px;
-  border-right: 1px solid var(--divider-soft);
-}
-
-.settings-nav-item {
-  display: flex;
-  height: 34px;
-  align-items: center;
-  gap: 9px;
-  padding: 0 10px;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--text-secondary);
-  cursor: pointer;
-  font-size: 11.5px;
-  text-align: left;
-  transition: background var(--motion-fast) var(--ease-out), color var(--motion-fast) var(--ease-out);
-}
-
-.settings-nav-item:hover {
-  background: var(--panel-muted);
-  color: var(--text-primary);
-}
-
-.settings-nav-item.active {
-  background: var(--accent-faint);
-  color: var(--accent-strong);
-  font-weight: 650;
 }
 
 .settings-content {
   min-width: 0;
   flex: 1;
   overflow-y: auto;
-  padding: 20px clamp(20px, 1.5vw, 28px) 40px clamp(20px, 2vw, 32px);
+  padding: 18px 26px 30px;
   scrollbar-width: thin;
 }
 
-/* Cards share the row equally, whatever their count: two cards split the width
-   in half, three split it in thirds. A grid with a fixed column count left a
-   dead column behind whenever the count did not divide evenly. */
-.settings-group {
+/* --------------------------------------------------------- sectioned card */
+
+/* One card holds every section, divided by hairlines. Rows flow into two
+   columns so each control sits beside its label instead of at the far edge. */
+.settings-panel {
   display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: 14px;
-  padding: 14px 18px 18px;
-  border: 1px solid var(--border-soft);
-  border-radius: 14px;
-  background: var(--panel-strong);
-  animation: settings-in var(--motion-base) var(--ease-out) both;
-}
-
-.settings-group > h2,
-.settings-group > .settings-subheading,
-.settings-group > .settings-note,
-.settings-group > .settings-inline.spread,
-.settings-group > .about-card,
-.settings-group > .editor-shortcuts {
-  width: 100%;
-}
-
-/* Sections that are a single long list (shortcuts, data, about) use one card
-   across the full width rather than a row of narrow ones. */
-.settings-card--wide {
-  flex-basis: 100%;
-}
-
-/* Rows in a wide card flow into columns so a long list does not become one
-   very wide row of whitespace. */
-.settings-card--wide:not(.settings-card--list) .settings-card-body {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-  align-items: start;
-}
-
-/* List-style cards are a single column of label/value rows; `--wide` would
-   otherwise tile them into grid columns. */
-.settings-card--list .settings-card-body {
-  display: flex;
-  flex-direction: column;
-  max-width: 620px;
-}
-
-.settings-card--wide .settings-inline.spread,
-.settings-card--wide .settings-note,
-.settings-card--wide .settings-subheading,
-.settings-card--wide .editor-shortcuts {
-  grid-column: 1 / -1;
-}
-
-.settings-card {
-  display: flex;
-  min-width: 0;
-  flex: 1 1 320px;
   flex-direction: column;
   overflow: hidden;
   border: 1px solid var(--border-soft);
-  border-radius: 11px;
+  border-radius: 12px;
   background: var(--panel-strong);
+  box-shadow: 0 1px 2px rgba(50, 42, 90, 0.04);
+  animation: settings-in var(--motion-base) var(--ease-out) both;
 }
 
-.settings-card-title {
-  margin: 0;
-  padding: 10px 14px 0;
-  color: var(--text-tertiary);
-  font-size: 9.5px;
-  font-weight: 700;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
+.settings-sect + .settings-sect {
+  border-top: 1px solid var(--border-soft);
 }
 
-.settings-card-body {
+.sect-head {
   display: flex;
-  flex-direction: column;
+  align-items: baseline;
+  gap: 8px;
+  padding: 14px 18px 4px;
 }
 
-.settings-group h2 {
-  margin: 0 2px 2px;
+.sect-head h2 {
+  margin: 0;
   color: var(--text-secondary);
   font-size: 10px;
   font-weight: 700;
@@ -958,26 +972,74 @@ function platformLabel(): string {
   text-transform: uppercase;
 }
 
-/* Rows are separated by hairlines inside a card, not by their own borders. */
+.sect-rows {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: 0 18px 8px;
+}
+
+/* Non-row extras (search bar, notes, editor shortcut list) span the card. */
+.sect-rows > .settings-inline,
+.sect-rows > .settings-note,
+.sect-rows > .settings-subheading,
+.sect-rows > .editor-shortcuts {
+  grid-column: 1 / -1;
+}
+
+.sect-rows > .settings-inline.spread {
+  padding: 10px 0 4px;
+}
+
+/* Sections without a heading (shortcuts, data, about) are lists, not pairs. */
+.settings-sect--list .sect-rows {
+  display: flex;
+  flex-direction: column;
+  padding: 6px 18px 12px;
+}
+
+.settings-sect--list .settings-row {
+  padding-right: 0;
+  padding-left: 0;
+}
+
+.settings-sect--list .settings-row:nth-child(odd) {
+  padding-right: 0;
+  border-right: 0;
+}
+
 .settings-row {
   display: flex;
-  min-height: 54px;
+  min-height: 48px;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 8px 14px;
-  border-top: 1px solid var(--border-soft);
+  padding: 8px 0;
 }
 
-.settings-card-body > .settings-row:first-child {
-  border-top: 0;
+/* Two-column rule: the left cell of each pair owns the divider. */
+.sect-rows > .settings-row:nth-child(odd) {
+  padding-right: 26px;
+  border-right: 1px solid var(--border-soft);
+}
+
+.sect-rows > .settings-row:nth-child(even) {
+  padding-left: 26px;
 }
 
 .settings-row.stacked {
   flex-direction: column;
   align-items: stretch;
   gap: 8px;
-  padding: 12px 14px;
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+
+/* A stacked row spans both columns; the odd-cell divider would cut through it. */
+.sect-rows > .settings-row.stacked {
+  grid-column: 1 / -1;
+  padding-right: 0;
+  padding-left: 0;
+  border-right: 0;
 }
 
 .settings-copy {
@@ -1303,10 +1365,10 @@ function platformLabel(): string {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin: 12px 0 4px;
+  margin: 14px 18px 10px;
   padding: 14px;
   border: 1px solid var(--border-soft);
-  border-radius: 12px;
+  border-radius: 11px;
   background: linear-gradient(135deg, var(--accent-faint), var(--panel-strong) 70%);
 }
 
@@ -1346,24 +1408,35 @@ function platformLabel(): string {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .settings-group {
+  .settings-panel {
     animation: none;
+  }
+}
+
+@media (max-width: 1080px) {
+  .sect-rows {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .sect-rows > .settings-row:nth-child(odd) {
+    padding-right: 0;
+    border-right: 0;
+  }
+
+  .sect-rows > .settings-row:nth-child(even) {
+    padding-left: 0;
   }
 }
 
 @media (max-width: 900px) {
   .settings-nav {
-    width: 132px;
-    flex-basis: 132px;
+    width: 190px;
+    flex-basis: 190px;
+    padding: 16px 10px;
   }
 
-  .settings-nav-item span {
-    font-size: 11px;
-  }
-
-  .settings-group {
-    flex-direction: column;
-    align-items: stretch;
+  .nav-copy small {
+    display: none;
   }
 
   .settings-row {

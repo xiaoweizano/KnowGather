@@ -118,6 +118,20 @@ export function localDayKey(date: Date): string {
   return `${year}-${month}-${day}`
 }
 
+/**
+ * ISO timestamp for local noon on a `YYYY-MM-DD` key.
+ *
+ * Noon rather than midnight because the value is stored in UTC: midnight local
+ * can land on the previous day once the offset is applied, which would shift a
+ * backdated import onto the wrong heatmap cell.
+ */
+export function dayKeyToLocalNoonIso(dayKey: string): string | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dayKey)
+  if (!match) return null
+  const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]), 12, 0, 0, 0)
+  return Number.isNaN(date.getTime()) ? null : date.toISOString()
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }

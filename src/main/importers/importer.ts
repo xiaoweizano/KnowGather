@@ -1,10 +1,11 @@
-import { basename, extname, relative } from 'node:path'
+import { basename, dirname, extname, relative } from 'node:path'
 import { constants } from 'node:fs'
-import { open, readdir, readFile } from 'node:fs/promises'
+import { open, readdir, readFile, stat } from 'node:fs/promises'
 import { convertDocx } from './docx.js'
 import { decodeTextBuffer, type DetectedEncoding } from './encoding.js'
 import { guessTitleFromContent, markdownToHtml, plainTextToHtml } from './textFormats.js'
 import { openZip } from './zip.js'
+import { inferImportDate } from './dateInference.js'
 
 /**
  * Turns imported files into documents.
@@ -37,6 +38,11 @@ export interface ImportedDocument {
   format: ImportedFormat
   /** Path inside the folder or archive, used for reporting. */
   sourceLabel: string
+  /**
+   * Local `YYYY-MM-DD` the file belongs to, read from its folder/file name and
+   * falling back to the modification time. `null` means "use today".
+   */
+  date: string | null
   encoding?: DetectedEncoding
   warnings: string[]
 }
@@ -114,7 +120,7 @@ export async function importSources(sources: readonly ImportSource[]): Promise<I
         totalBytes += file.bytes.length
 
         try {
-          documents.push(convertFile(file.label, file.displayName, file.bytes))
+          documents.push(convertFile(file.label, file.displayName, file.bytes, file.datePath, file.modifiedAt))
         } catch (error) {
           failures.push({ sourceLabel: file.label, reason: messageOf(error), ...failureCode(error) })
         }
@@ -133,13 +139,28 @@ interface CollectedFile {
   /** Name without extension, used as a title fallback. */
   displayName: string
   bytes: Buffer
+  /**
+   * Path used to infer the date, including the selected root folder: a user who
+   * picks `202405` as the import root still gets the month from its name.
+   */
+  datePath: string
+  /** File system timestamp, used when the name carries no date. */
+  modifiedAt: Date | null
 }
 
 async function collectFiles(source: ImportSource, skipped: ImportFailure[]): Promise<CollectedFile[]> {
   if (source.kind === 'file') {
     const bytes = await readFileShared(source.path)
     if (bytes.length > MAX_FILE_BYTES) throw new ImportError('文件过大，已拒绝导入', 'tooLarge')
-    return [{ label: basename(source.path), displayName: basename(source.path, extname(source.path)), bytes }]
+    const fileName = basename(source.path)
+    return [{
+      label: fileName,
+      displayName: basename(source.path, extname(source.path)),
+      bytes,
+      // One level of context so a hand-picked `22.txt` still finds its month.
+      datePath: `${basename(dirname(source.path))}/${fileName}`,
+      modifiedAt: await modifiedAtOf(source.path),
+    }]
   }
 
   if (source.kind === 'folder') {
@@ -147,6 +168,15 @@ async function collectFiles(source: ImportSource, skipped: ImportFailure[]): Pro
   }
 
   return collectFromArchive(source.path, skipped)
+}
+
+/** A missing or unreadable timestamp only means "no date hint", never a failure. */
+async function modifiedAtOf(filePath: string): Promise<Date | null> {
+  try {
+    return (await stat(filePath)).mtime
+  } catch {
+    return null
+  }
 }
 
 /**
@@ -227,10 +257,15 @@ async function collectFromFolder(
       skipped.push({ sourceLabel: displayPath(root, fullPath), reason: '文件过大，已跳过', code: 'tooLargeSkipped' })
       continue
     }
+    const relativePath = displayPath(root, fullPath)
     files.push({
-      label: displayPath(root, fullPath),
+      label: relativePath,
       displayName: basename(entry.name, extension),
       bytes,
+      // The selected root folder is part of the date context: importing
+      // "202405" directly must still read the month from its name.
+      datePath: `${basename(root)}/${relativePath}`,
+      modifiedAt: await modifiedAtOf(fullPath),
     })
   }
 
@@ -246,6 +281,9 @@ async function collectFromArchive(archivePath: string, skipped: ImportFailure[])
   const bytes = await readFileShared(archivePath)
   const archive = openZip(bytes)
   const archiveName = basename(archivePath)
+  // Archive entries carry no timestamp this reader exposes, so the archive's
+  // own mtime stands in for all of them.
+  const archiveModifiedAt = await modifiedAtOf(archivePath)
   const files: CollectedFile[] = []
 
   for (const name of archive.listNames()) {
@@ -276,6 +314,8 @@ async function collectFromArchive(archivePath: string, skipped: ImportFailure[])
       label: `${archiveName}/${name}`,
       displayName: basename(name, extension),
       bytes: data,
+      datePath: name,
+      modifiedAt: archiveModifiedAt,
     })
   }
 
@@ -347,18 +387,31 @@ function assertReadableWordPackage(bytes: Uint8Array, label: string): void {
   throw new ImportError('不是有效的 Word 文档（.docx），文件为空或已损坏', 'invalidWord')
 }
 
-/** Converts one file's bytes into an editor document. Throws on unusable input. */
-export function convertFile(label: string, displayName: string, bytes: Buffer): ImportedDocument {
+/**
+ * Converts one file's bytes into an editor document. Throws on unusable input.
+ *
+ * `datePath` and `modifiedAt` are only used to work out which day the file
+ * belongs to; see `inferImportDate`.
+ */
+export function convertFile(
+  label: string,
+  displayName: string,
+  bytes: Buffer,
+  datePath = label,
+  modifiedAt: Date | null = null,
+): ImportedDocument {
   const extension = extname(label).toLowerCase()
+  const date = inferImportDate(datePath, modifiedAt)
 
   if (extension === '.docx' || extension === '.doc') {
     assertReadableWordPackage(bytes, label)
     const conversion = convertDocx(bytes)
     return {
-      title: conversion.title || displayName,
+      title: datedTitle(conversion.title || displayName, date),
       html: conversion.html,
       format: 'docx',
       sourceLabel: label,
+      date,
       warnings: conversion.warnings,
     }
   }
@@ -372,23 +425,34 @@ export function convertFile(label: string, displayName: string, bytes: Buffer): 
     const { frontMatter, body } = splitFrontMatter(text)
     const title = frontMatter.title || guessTitleFromContent(body, displayName)
     return {
-      title,
+      title: datedTitle(title, date),
       html: markdownToHtml(body),
       format: 'markdown',
       sourceLabel: label,
+      date,
       encoding: decoded.encoding,
       warnings: [],
     }
   }
 
   return {
-    title: guessTitleFromContent(text, displayName),
+    title: datedTitle(guessTitleFromContent(text, displayName), date),
     html: plainTextToHtml(text),
     format: 'text',
     sourceLabel: label,
+    date,
     encoding: decoded.encoding,
     warnings: [],
   }
+}
+
+/**
+ * `22.txt` would otherwise be titled "22", and `20240520.txt` "20240520".
+ * When the title is nothing but that number, the inferred date is more useful.
+ */
+function datedTitle(title: string, date: string | null): string {
+  if (!date) return title
+  return /^\d{1,8}$/.test(title.trim()) ? date : title
 }
 
 /** Reads the small YAML subset used for titles in Markdown front matter. */

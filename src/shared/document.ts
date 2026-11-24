@@ -28,6 +28,8 @@ export interface DocumentRecord {
   createdAt: string
   updatedAt: string
   deletedAt: string | null
+  /** Journal this document was promoted from, if any. Absent on old records. */
+  sourceJournalId?: string | null
 }
 
 export interface DocumentSavePayload {
@@ -39,6 +41,12 @@ export interface DocumentSavePayload {
   content: TiptapDocument
   revision: number
   version: number
+  /**
+   * Backdating hint used only when the document is first created: imported
+   * files carry the date they were written on. Ignored for existing records.
+   */
+  createdAt?: string
+  sourceJournalId?: string | null
 }
 
 export interface CategoryRecord {
@@ -64,6 +72,8 @@ export interface JournalRecord {
   createdAt: string
   updatedAt: string
   deletedAt: string | null
+  /** Library document this journal was synced to, if any. Absent on old records. */
+  documentId?: string | null
 }
 
 export interface JournalSavePayload {
@@ -73,12 +83,21 @@ export interface JournalSavePayload {
   categoryId: string | null
   revision: number
   version: number
+  /**
+   * Backdating hint used only when the journal is first created: an imported
+   * file carries the day it was written on. Ignored for existing records.
+   */
+  createdAt?: string
+  documentId?: string | null
 }
 
 export interface SaveReceipt {
   revision: number
   version: number
+  /** When the record was actually written; equals an import's backdated time. */
   savedAt: string
+  /** True when this save created the record rather than updating it. */
+  created?: boolean
 }
 
 export interface AttachmentReference {
@@ -113,6 +132,7 @@ export function createDocumentRecord(input: {
   tags?: string[]
   favorite?: boolean
   now?: string
+  sourceJournalId?: string | null
 }): DocumentRecord {
   const now = input.now ?? new Date().toISOString()
   return {
@@ -127,6 +147,7 @@ export function createDocumentRecord(input: {
     createdAt: now,
     updatedAt: now,
     deletedAt: null,
+    sourceJournalId: input.sourceJournalId ?? null,
   }
 }
 

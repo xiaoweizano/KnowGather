@@ -20,12 +20,29 @@ function localDateKey(value: Date): string {
   return `${year}-${month}-${day}`
 }
 
+/** Local `YYYY-MM-DD` for the clock; the heatmap keys days the same way. */
+export function todayDayKey(now = new Date()): string {
+  return localDateKey(now)
+}
+
 export function countJournalsForLocalDate(journals: readonly JournalRecord[], now = new Date()): number {
   const target = localDateKey(now)
+  // Entries belong to the day they were written (`createdAt`), not the day they
+  // were last edited, so editing yesterday's entry still counts as yesterday.
   return journals.reduce((count, journal) => {
-    const date = new Date(journal.updatedAt)
+    const date = new Date(journal.createdAt)
     return Number.isNaN(date.getTime()) || localDateKey(date) !== target ? count : count + 1
   }, 0)
+}
+
+/** Map of local days that already have a journal entry, for heatmap labels. */
+export function journalDaysSet(journals: readonly JournalRecord[]): Record<string, true> {
+  const days: Record<string, true> = {}
+  for (const journal of journals) {
+    const date = new Date(journal.createdAt)
+    if (!Number.isNaN(date.getTime())) days[localDateKey(date)] = true
+  }
+  return days
 }
 
 export interface KnowledgeSearchShortcut {

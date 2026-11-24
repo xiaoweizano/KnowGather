@@ -14,7 +14,7 @@ import { useUiStore } from '../stores/ui'
 import { useSettingsStore } from '../stores/settings'
 import { getShizhiApi } from '../services/api'
 import { resolveDocumentViewState } from './documentPageState'
-import { resolveNavigationTarget, type NavigationKey } from './knowledgeNavigation'
+import { resolveNavigationTarget, todayDayKey, type NavigationKey } from './knowledgeNavigation'
 import type { ImportOutcome } from '../stores/document'
 import { useI18n } from '../i18n/useI18n'
 import {
@@ -40,10 +40,11 @@ const { t } = useI18n()
 const api = getShizhiApi()
 const initializing = ref(false)
 const creating = ref(false)
-const activeNavigation = ref<NavigationKey>('library')
+const activeNavigation = ref<NavigationKey>('journal')
 const importOpen = ref(false)
 const importing = ref(false)
 const importDefaultCategory = ref<string | null>(null)
+const importAllowMerge = ref(false)
 const importDialog = ref<{ showResult: (outcome: ImportOutcome) => void } | null>(null)
 let disposeCloseRequest: (() => void) | null = null
 
@@ -65,9 +66,13 @@ function showPageToast(message: string): void {
 
 let toastTimer: ReturnType<typeof setTimeout> | null = null
 
-function handleNavigation(key: NavigationKey): void {
-  // Leaving the journal editor commits any pending journal changes first.
-  if (activeNavigation.value === 'journal' && key !== 'journal') documentStore.closeJournal()
+async function handleNavigation(key: NavigationKey): Promise<void> {
+  // Leaving the journal editor commits any pending journal changes first; the
+  // autosave controller is disposed on close, so an unflushed edit would vanish.
+  if (activeNavigation.value === 'journal' && key !== 'journal') {
+    await documentStore.saveJournalNow()
+    documentStore.closeJournal()
+  }
   activeNavigation.value = key
 }
 
@@ -141,11 +146,6 @@ function focusLibrarySearch(): void {
   window.setTimeout(() => attempt(5), 0)
 }
 
-async function handleHomeCreateDocument(): Promise<void> {
-  const created = await documentStore.createDocument()
-  if (created) activeNavigation.value = 'library'
-}
-
 async function handleHomeOpenDocument(id: string): Promise<void> {
   activeNavigation.value = 'library'
   await documentStore.selectDocument(id)
@@ -156,8 +156,31 @@ async function handleHomeOpenJournal(id: string): Promise<void> {
   await documentStore.selectJournal(id)
 }
 
-function openImportDialog(categoryId: string | null = null): void {
+/**
+ * Heatmap cells name a local day. The day's entry is opened, or created
+ * backdated when the day is empty — including days that already have imported
+ * activity but no entry yet.
+ */
+async function handleOpenJournalDay(dayKey: string): Promise<void> {
+  activeNavigation.value = 'journal'
+  const opened = await documentStore.openJournalForDay(dayKey)
+  if (!opened) showPageToast(documentStore.error ?? t('journal.dayCreateFailed'))
+}
+
+async function handleOpenDocumentFromJournal(id: string): Promise<void> {
+  // Leaving the journal editor for a document must close it; the library view
+  // renders the journal editor whenever one is open.
+  if (documentStore.currentJournal) {
+    await documentStore.saveJournalNow()
+    documentStore.closeJournal()
+  }
+  activeNavigation.value = 'library'
+  await documentStore.selectDocument(id)
+}
+
+function openImportDialog(categoryId: string | null = null, options: { allowMerge?: boolean } = {}): void {
   importDefaultCategory.value = categoryId
+  importAllowMerge.value = options.allowMerge === true
   importOpen.value = true
 }
 
@@ -169,7 +192,8 @@ async function runImport(options: { mode: 'files' | 'folder' | 'archive'; catego
     if (options.merge) activeNavigation.value = 'library'
     const outcome = await documentStore.importDocuments(options)
     if (outcome.canceled) return
-    if (!options.merge && outcome.created > 0) activeNavigation.value = 'library'
+    // Imports become journal entries, so the journal list is where they land.
+    if (!options.merge && outcome.created > 0) activeNavigation.value = 'journal'
     importDialog.value?.showResult(outcome)
   } finally {
     importing.value = false
@@ -219,6 +243,11 @@ onMounted(async () => {
   // app-level settings once at startup to apply locale and window behaviour.
   void settingsStore.load()
   await loadKnowledgeBase()
+  // The journal is the daily surface: land on today's entry when one exists.
+  // A missing day is not created here — opening the page should not write data.
+  if (activeNavigation.value === 'journal' && !documentStore.error) {
+    await documentStore.openJournalForDay(todayDayKey(), { create: false })
+  }
 })
 
 onBeforeUnmount(() => {
@@ -250,12 +279,19 @@ onBeforeUnmount(() => {
       @reset="ui.resetNavigationWidth()"
     />
 
+    <JournalPage
+      v-if="activePage.page === 'journal'"
+      @open-day="handleOpenJournalDay"
+      @open-document="handleOpenDocumentFromJournal"
+      @import-history="openImportDialog(null)"
+    />
+
     <HomePage
-      v-if="activePage.page === 'home'"
+      v-else-if="activePage.page === 'home'"
       class="page-pane"
-      @create-document="handleHomeCreateDocument"
       @open-document="handleHomeOpenDocument"
       @open-journal="handleHomeOpenJournal"
+      @open-journal-day="handleOpenJournalDay"
       @import-documents="openImportDialog()"
       @go-to-library="activeNavigation = 'library'"
       @go-to-journal="activeNavigation = 'journal'"
@@ -269,7 +305,7 @@ onBeforeUnmount(() => {
         :initializing="initializing"
         :load-error="viewState === 'error' ? loadError : null"
         @retry-load="loadKnowledgeBase"
-        @import-documents="openImportDialog($event ?? null)"
+        @import-documents="openImportDialog($event ?? null, { allowMerge: true })"
         @notify="showPageToast"
       />
       <ColumnResizer
@@ -315,11 +351,7 @@ onBeforeUnmount(() => {
           </button>
         </div>
       </section>
-
-      <JournalPage v-else />
     </template>
-
-    <JournalPage v-else-if="activePage.page === 'journal'" />
 
     <section v-else-if="activePage.page === 'assistant'" class="app-loading app-unimplemented" aria-labelledby="assistant-heading">
       <AppIcon name="sparkles" :size="25" />
@@ -339,6 +371,8 @@ onBeforeUnmount(() => {
       :categories="documentStore.categories"
       :default-category-id="importDefaultCategory"
       :busy="importing"
+      :allow-merge="importAllowMerge"
+      :allow-category="importAllowMerge"
       @close="importOpen = false"
       @submit="runImport"
     />

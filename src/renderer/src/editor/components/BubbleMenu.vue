@@ -3,10 +3,19 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { Editor } from '@tiptap/core'
 import { computePosition, flip, offset, shift } from '@floating-ui/dom'
 import AppIcon from '../../components/AppIcon.vue'
-import { isEditorCommandActive, runEditorCommand, setEditorHighlight, setEditorTextColor, type EditorCommand } from '../core/editorCommands'
-import { HIGHLIGHT_COLORS, TEXT_COLORS } from '../core/toolbarConfig'
-import { shouldShowBubbleMenu } from '../core/overlayModel'
+import { getShizhiApi } from '../../services/api'
+import {
+  applyEditorLink,
+  getActiveLinkRange,
+  isEditorCommandActive,
+  runEditorCommand,
+  setEditorHighlight,
+  setEditorTextColor,
+  type EditorCommand,
+} from '../core/editorCommands'
 import { useI18n } from '../../i18n/useI18n'
+import LinkForm from './LinkForm.vue'
+import ColorPanel from './ColorPanel.vue'
 
 const props = defineProps<{
   editor: Editor
@@ -17,23 +26,40 @@ const { t } = useI18n()
 const bubble = ref<HTMLElement | null>(null)
 const revision = ref(0)
 const panel = ref<'' | 'color' | 'highlight' | 'link'>('')
-const linkValue = ref('')
+const linkText = ref('')
+const linkHref = ref('')
+const bubbleColorButton = ref<HTMLElement | null>(null)
+const bubbleHighlightButton = ref<HTMLElement | null>(null)
 let boundEditor: Editor | null = null
 
 const selectionEmpty = computed(() => {
   revision.value
   return props.editor.state.selection.empty
 })
-const visible = computed(() => shouldShowBubbleMenu(
-  selectionEmpty.value,
-  Boolean(props.composing),
-  props.editor.isEditable,
-))
+const activeTextColor = computed(() => {
+  revision.value
+  const value = props.editor.getAttributes('textStyle').color
+  return typeof value === 'string' && value ? value : null
+})
+const activeHighlight = computed(() => {
+  revision.value
+  const value = props.editor.getAttributes('highlight').color
+  return typeof value === 'string' && value ? value : null
+})
 const linkActive = computed(() => {
   revision.value
   return props.editor.isActive('link')
 })
+// Links get their own toolbar at the caret, which is otherwise a no-op for the
+// formatting bubble. A link card replaces both while it is open.
+const visible = computed(() => {
+  revision.value
+  if (!props.editor.isEditable || props.composing) return false
+  return !selectionEmpty.value || linkActive.value
+})
 
+// Sub/superscript are mark-level, so they belong on the selection menu rather
+// than only in the toolbar's "more" panel.
 const markActions: ReadonlyArray<{ command: EditorCommand; labelKey: string; icon: string }> = [
   { command: 'bold', labelKey: 'editor.bold', icon: 'bold' },
   { command: 'italic', labelKey: 'editor.italic', icon: 'italic' },
@@ -44,7 +70,8 @@ const markActions: ReadonlyArray<{ command: EditorCommand; labelKey: string; ico
 
 function handleEditorEvent(): void {
   revision.value += 1
-  if (selectionEmpty.value) panel.value = ''
+  if (selectionEmpty.value && !linkActive.value) panel.value = ''
+  else if (!props.editor.isActive('link') && panel.value === 'link') panel.value = ''
   void nextTick(positionBubble)
 }
 
@@ -67,6 +94,7 @@ watch(visible, (isVisible) => {
   if (isVisible) void nextTick(positionBubble)
   else panel.value = ''
 })
+watch(panel, () => void nextTick(positionBubble))
 
 onMounted(() => {
   document.addEventListener('scroll', positionBubble, true)
@@ -82,9 +110,10 @@ onBeforeUnmount(() => {
 
 async function positionBubble(): Promise<void> {
   if (!visible.value || !bubble.value) return
-  const { from, to } = props.editor.state.selection
-  const start = props.editor.view.coordsAtPos(from)
-  const end = props.editor.view.coordsAtPos(to)
+  // Anchor to the whole link, not to a collapsed caret inside it.
+  const range = linkActive.value ? getActiveLinkRange(props.editor) ?? props.editor.state.selection : props.editor.state.selection
+  const start = props.editor.view.coordsAtPos(range.from)
+  const end = props.editor.view.coordsAtPos(range.to)
   const left = Math.min(start.left, end.left)
   const right = Math.max(start.right, end.right)
   const top = Math.min(start.top, end.top)
@@ -101,8 +130,9 @@ async function positionBubble(): Promise<void> {
       height: Math.max(1, bottom - top),
     }),
   }
+  const below = linkActive.value || panel.value === 'link'
   const { x, y, strategy } = await computePosition(virtualElement, bubble.value, {
-    placement: 'top-start',
+    placement: below ? 'bottom-start' : 'top-start',
     strategy: 'fixed',
     middleware: [offset(9), flip({ padding: 8 }), shift({ padding: 8 })],
   })
@@ -123,10 +153,13 @@ function isActive(command: EditorCommand): boolean {
 
 function togglePanel(next: typeof panel.value): void {
   panel.value = panel.value === next ? '' : next
-  if (next === 'link') {
-    linkValue.value = String(props.editor.getAttributes('link').href ?? '')
-    void nextTick(() => document.querySelector<HTMLInputElement>('.bubble-link-input')?.focus())
-  }
+}
+
+function openLinkPanel(): void {
+  const range = getActiveLinkRange(props.editor) ?? props.editor.state.selection
+  linkText.value = range.from === range.to ? '' : props.editor.state.doc.textBetween(range.from, range.to, ' ')
+  linkHref.value = String(props.editor.getAttributes('link').href ?? '')
+  panel.value = panel.value === 'link' ? '' : 'link'
 }
 
 function applyColor(color: string | null): void {
@@ -141,61 +174,103 @@ function applyHighlight(color: string | null): void {
   revision.value += 1
 }
 
-function applyLink(): void {
-  const href = linkValue.value.trim()
-  if (!href) {
-    props.editor.chain().extendMarkRange('link').unsetLink().run()
-  } else {
-    const normalized = /^(https?:|mailto:|#|\/)/i.test(href) ? href : `https://${href}`
-    props.editor.chain().extendMarkRange('link').setLink({ href: normalized }).run()
-  }
+function applyLink(text: string, href: string): void {
+  applyEditorLink(props.editor, text, href)
   panel.value = ''
   revision.value += 1
 }
+
+function currentHref(): string {
+  return String(props.editor.getAttributes('link').href ?? '')
+}
+
+async function openActiveLink(): Promise<void> {
+  const href = currentHref()
+  if (href) await getShizhiApi().app.openExternal(href)
+}
+
+async function copyActiveLink(): Promise<void> {
+  const href = currentHref()
+  if (!href) return
+  try {
+    await navigator.clipboard.writeText(href)
+  } catch {
+    // Clipboard access can be denied; the link itself must not change.
+  }
+}
+
+function removeActiveLink(): void {
+  props.editor.chain().focus().extendMarkRange('link').unsetLink().run()
+  panel.value = ''
+  revision.value += 1
+}
+
 </script>
 
 <template>
-  <div v-if="visible" ref="bubble" class="bubble-menu" role="toolbar" :aria-label="t('editor.bubble.aria')">
-    <button
-      v-for="action in markActions"
-      :key="action.command"
-      type="button"
-      :class="{ active: isActive(action.command) }"
-      :aria-label="t(action.labelKey)"
-      :title="t(action.labelKey)"
-      @mousedown.prevent
-      @click="applyMark(action.command)"
-    >
-      <AppIcon :name="action.icon" :size="15" />
-    </button>
-    <span class="bubble-divider" />
-    <button type="button" :aria-label="t('editor.toolbar.color')" :title="t('editor.toolbar.color')" :class="{ active: panel === 'color' }" @mousedown.prevent @click="togglePanel('color')">
-      <AppIcon name="palette" :size="15" />
-    </button>
-    <button type="button" :aria-label="t('editor.toolbar.highlight')" :title="t('editor.toolbar.highlight')" :class="{ active: isActive('highlight') }" @mousedown.prevent @click="togglePanel('highlight')">
-      <span class="highlight-dot" />
-    </button>
-    <button type="button" :aria-label="t('editor.link')" :title="t('editor.link')" :class="{ active: linkActive }" @mousedown.prevent @click="togglePanel('link')">
-      <AppIcon name="link" :size="15" />
-    </button>
+  <div
+    v-if="visible"
+    ref="bubble"
+    class="bubble-menu"
+    :class="{ 'bubble-menu--card': panel === 'link' }"
+    role="toolbar"
+    :aria-label="t('editor.bubble.aria')"
+  >
+    <LinkForm
+      v-if="panel === 'link'"
+      :text="linkText"
+      :href="linkHref"
+      @submit="applyLink"
+      @cancel="panel = ''"
+    />
 
-    <div v-if="panel === 'color' || panel === 'highlight'" class="bubble-palette" @mousedown.prevent>
+    <template v-else-if="linkActive">
+      <button type="button" :aria-label="t('editor.link.open')" :title="t('editor.link.open')" @mousedown.prevent @click="openActiveLink">
+        <AppIcon name="external" :size="15" />
+      </button>
+      <button type="button" :aria-label="t('editor.link.edit')" :title="t('editor.link.edit')" @mousedown.prevent @click="openLinkPanel">
+        <AppIcon name="edit" :size="15" />
+      </button>
+      <button type="button" :aria-label="t('editor.link.copy')" :title="t('editor.link.copy')" @mousedown.prevent @click="copyActiveLink">
+        <AppIcon name="copy" :size="15" />
+      </button>
+      <button type="button" :aria-label="t('editor.link.remove')" :title="t('editor.link.remove')" @mousedown.prevent @click="removeActiveLink">
+        <AppIcon name="unlink" :size="15" />
+      </button>
+    </template>
+
+    <template v-else>
       <button
-        v-for="option in panel === 'color' ? TEXT_COLORS : HIGHLIGHT_COLORS"
-        :key="option.labelKey"
+        v-for="action in markActions"
+        :key="action.command"
         type="button"
-        class="bubble-swatch"
-        :class="{ 'swatch-default': !option.value }"
-        :style="option.value ? { '--swatch': option.value } : undefined"
-        :title="t(option.labelKey)"
-        @click="panel === 'color' ? applyColor(option.value) : applyHighlight(option.value)"
+        :class="{ active: isActive(action.command) }"
+        :aria-label="t(action.labelKey)"
+        :title="t(action.labelKey)"
+        @mousedown.prevent
+        @click="applyMark(action.command)"
+      >
+        <AppIcon :name="action.icon" :size="15" />
+      </button>
+      <span class="bubble-divider" />
+      <button ref="bubbleColorButton" type="button" :aria-label="t('editor.toolbar.color')" :title="t('editor.toolbar.color')" :class="{ active: panel === 'color' }" @mousedown.prevent @click="togglePanel('color')">
+        <AppIcon name="palette" :size="15" />
+      </button>
+      <button ref="bubbleHighlightButton" type="button" :aria-label="t('editor.toolbar.highlight')" :title="t('editor.toolbar.highlight')" :class="{ active: panel === 'highlight' }" @mousedown.prevent @click="togglePanel('highlight')">
+        <span class="highlight-dot" />
+      </button>
+      <button type="button" :aria-label="t('editor.link')" :title="t('editor.link')" :class="{ active: linkActive }" @mousedown.prevent @click="openLinkPanel">
+        <AppIcon name="link" :size="15" />
+      </button>
+      <ColorPanel
+        v-if="panel === 'color' || panel === 'highlight'"
+        :mode="panel === 'highlight' ? 'highlight' : 'color'"
+        :anchor="panel === 'highlight' ? bubbleHighlightButton : bubbleColorButton"
+        :current="panel === 'highlight' ? activeHighlight : activeTextColor"
+        @pick="panel === 'highlight' ? applyHighlight($event) : applyColor($event)"
+        @close="panel = ''"
       />
-    </div>
-
-    <div v-if="panel === 'link'" class="bubble-link" @mousedown.prevent>
-      <input v-model="linkValue" class="bubble-link-input" type="url" :placeholder="t('editor.toolbar.linkPlaceholder')" @keydown.enter.prevent="applyLink" @keydown.esc.prevent="panel = ''" />
-      <button type="button" @click="applyLink">{{ t('editor.toolbar.linkApply') }}</button>
-    </div>
+    </template>
   </div>
 </template>
 
@@ -212,6 +287,15 @@ function applyLink(): void {
   border-radius: 9px;
   background: var(--panel-strong);
   box-shadow: var(--shadow-float);
+}
+
+/* The link card draws its own frame, so the toolbar chrome steps aside. */
+.bubble-menu--card {
+  height: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .bubble-menu > button {
@@ -247,66 +331,4 @@ function applyLink(): void {
   background: #fff0a8;
 }
 
-.bubble-palette {
-  position: absolute;
-  top: 42px;
-  left: 0;
-  display: flex;
-  gap: 7px;
-  padding: 9px;
-  border: 1px solid var(--border-soft);
-  border-radius: 9px;
-  background: var(--panel-strong);
-  box-shadow: var(--shadow-float);
-}
-
-.bubble-swatch {
-  width: 18px;
-  height: 18px;
-  padding: 0;
-  border: 1px solid color-mix(in srgb, var(--swatch, var(--border-strong)) 70%, #000 8%);
-  border-radius: 50%;
-  background: var(--swatch);
-  cursor: pointer;
-}
-
-.swatch-default {
-  background: linear-gradient(135deg, #fff 45%, #ece8f3 45% 55%, #8f899e 55%);
-}
-
-.bubble-link {
-  position: absolute;
-  top: 42px;
-  left: 0;
-  display: flex;
-  gap: 5px;
-  width: 270px;
-  padding: 7px;
-  border: 1px solid var(--border-soft);
-  border-radius: 9px;
-  background: var(--panel-strong);
-  box-shadow: var(--shadow-float);
-}
-
-.bubble-link input {
-  min-width: 0;
-  height: 28px;
-  flex: 1;
-  padding: 0 8px;
-  border: 1px solid var(--border-strong);
-  border-radius: 6px;
-  background: var(--panel-muted);
-  color: var(--text-primary);
-  font-size: 10px;
-}
-
-.bubble-link button {
-  padding: 0 9px;
-  border: 0;
-  border-radius: 6px;
-  background: var(--accent);
-  color: white;
-  cursor: pointer;
-  font-size: 10px;
-}
 </style>

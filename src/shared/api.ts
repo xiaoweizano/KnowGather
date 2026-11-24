@@ -27,6 +27,8 @@ export interface ImportedDocumentPayload {
   html: string
   format: 'text' | 'markdown' | 'docx'
   sourceLabel: string
+  /** Local `YYYY-MM-DD` inferred from the file name and folder, or null. */
+  date: string | null
   encoding?: string
   warnings: string[]
 }

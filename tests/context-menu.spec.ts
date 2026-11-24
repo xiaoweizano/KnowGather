@@ -7,16 +7,17 @@ const categories = [
 ]
 
 describe('knowledge context menus', () => {
-  it('offers only creation and import on the virtual "all" node', () => {
+  it('offers only creation on the virtual "all" node', () => {
     const menu = buildCategoryMenu({ categoryId: 'all', isVirtual: true })
-    expect(menu.map((item) => item.id)).toEqual(['new-document', 'import'])
+    // Importing historical files now lands in the journal, so it is no longer a
+    // library-category action.
+    expect(menu.map((item) => item.id)).toEqual(['new-document'])
   })
 
   it('adds rename and delete for real categories', () => {
     const menu = buildCategoryMenu({ categoryId: 'work', isVirtual: false })
     expect(menu.map((item) => item.id)).toEqual([
       'new-document',
-      'import',
       'rename-category',
       'delete-category',
     ])

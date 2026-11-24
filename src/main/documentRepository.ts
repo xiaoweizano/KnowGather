@@ -40,6 +40,16 @@ const EMPTY_DATABASE = (): KnowledgeDatabaseV2 => ({
   journalEntries: {},
 })
 
+/**
+ * A backdated import may not point at the future. Such a value is ignored
+ * rather than rejected: a wrong system clock should not block the save.
+ */
+function isPastTimestamp(value: string | undefined, now: string): value is string {
+  if (!value) return false
+  const time = Date.parse(value)
+  return Number.isFinite(time) && time <= Date.parse(now)
+}
+
 export class AtomicDocumentRepository {
   private writeQueue: Promise<void> = Promise.resolve()
 
@@ -71,15 +81,30 @@ export class AtomicDocumentRepository {
       const validated = validateDocumentSavePayload(payload)
       const database = await this.readDatabase()
       const current = database.documents[validated.id]
-      if (current && current.deletedAt === null && current.revision > validated.revision) {
+      // A tombstoned record never accepts a save.
+      if (current && current.deletedAt !== null) {
         return {
           revision: current.revision,
           version: current.version,
           savedAt: current.updatedAt,
+          created: false,
+        }
+      }
+      if (current && current.revision > validated.revision) {
+        return {
+          revision: current.revision,
+          version: current.version,
+          savedAt: current.updatedAt,
+          created: false,
         }
       }
 
       const now = new Date().toISOString()
+      // A backdated timestamp only applies when the record is first created;
+      // later edits always move updatedAt to the present.
+      const backdated = !current && isPastTimestamp(validated.createdAt, now) ? validated.createdAt : null
+      const createdAt = current?.createdAt ?? backdated ?? now
+      const updatedAt = backdated ?? now
       const record: DocumentRecord = {
         id: validated.id,
         title: validated.title.trim() || '无标题文档',
@@ -89,13 +114,14 @@ export class AtomicDocumentRepository {
         content: validated.content,
         revision: validated.revision,
         version: Math.max(validated.version, (current?.version ?? 0) + 1),
-        createdAt: current?.createdAt ?? now,
-        updatedAt: now,
+        createdAt,
+        updatedAt,
         deletedAt: null,
+        sourceJournalId: validated.sourceJournalId ?? current?.sourceJournalId ?? null,
       }
       database.documents[record.id] = record
       await this.writeDatabase(database)
-      return { revision: record.revision, version: record.version, savedAt: now }
+      return { revision: record.revision, version: record.version, savedAt: updatedAt, created: !current }
     })
   }
 
@@ -197,15 +223,29 @@ export class AtomicDocumentRepository {
       const validated = validateJournalSavePayload(payload)
       const database = await this.readDatabase()
       const current = database.journalEntries[validated.id]
-      if (current && current.deletedAt === null && current.revision > validated.revision) {
+      // A tombstoned entry never accepts a save: an autosave armed before the
+      // delete must not resurrect it.
+      if (current && current.deletedAt !== null) {
         return {
           revision: current.revision,
           version: current.version,
           savedAt: current.updatedAt,
+          created: false,
+        }
+      }
+      if (current && current.revision > validated.revision) {
+        return {
+          revision: current.revision,
+          version: current.version,
+          savedAt: current.updatedAt,
+          created: false,
         }
       }
 
       const now = new Date().toISOString()
+      // Same rule as documents: an imported entry keeps the day it was written
+      // on when it is first saved, and later edits move to the present.
+      const backdated = !current && isPastTimestamp(validated.createdAt, now) ? validated.createdAt : null
       const record: JournalRecord = {
         id: validated.id,
         title: validated.title.trim() || '无标题日志',
@@ -213,13 +253,14 @@ export class AtomicDocumentRepository {
         categoryId: validated.categoryId,
         revision: validated.revision,
         version: Math.max(validated.version, (current?.version ?? 0) + 1),
-        createdAt: current?.createdAt ?? now,
-        updatedAt: now,
+        createdAt: current?.createdAt ?? backdated ?? now,
+        updatedAt: backdated ?? now,
         deletedAt: null,
+        documentId: validated.documentId ?? current?.documentId ?? null,
       }
       database.journalEntries[record.id] = record
       await this.writeDatabase(database)
-      return { revision: record.revision, version: record.version, savedAt: now }
+      return { revision: record.revision, version: record.version, savedAt: record.updatedAt, created: !current }
     })
   }
 
@@ -338,9 +379,13 @@ function validatePersistedDocument(value: unknown, legacy: boolean): DocumentRec
       content: value.content,
       revision: value.revision,
       version: value.version,
+      ...(value.sourceJournalId === undefined || value.sourceJournalId === null
+        ? {}
+        : { sourceJournalId: value.sourceJournalId }),
     })
     return {
       ...payload,
+      sourceJournalId: payload.sourceJournalId ?? null,
       createdAt: expectTimestamp(value.createdAt, 'document createdAt'),
       updatedAt: expectTimestamp(value.updatedAt, 'document updatedAt'),
       deletedAt: value.deletedAt === null ? null : expectTimestamp(value.deletedAt, 'document deletedAt'),
@@ -376,9 +421,13 @@ function validatePersistedJournal(value: unknown): JournalRecord {
       content: value.content,
       revision: value.revision,
       version: value.version,
+      ...(value.documentId === undefined || value.documentId === null
+        ? {}
+        : { documentId: value.documentId }),
     })
     return {
       ...payload,
+      documentId: payload.documentId ?? null,
       createdAt: expectTimestamp(value.createdAt, 'journalEntry createdAt'),
       updatedAt: expectTimestamp(value.updatedAt, 'journalEntry updatedAt'),
       deletedAt: value.deletedAt === null ? null : expectTimestamp(value.deletedAt, 'journalEntry deletedAt'),

@@ -36,9 +36,10 @@ export interface EntryMenuContext {
  * creation and import, because renaming or deleting it makes no sense.
  */
 export function buildCategoryMenu(context: CategoryMenuContext): ContextMenuItem[] {
+  // Importing historical files now lands in the journal, so it is not offered
+  // as a library-category action.
   const items: ContextMenuItem[] = [
     { id: 'new-document', labelKey: 'library.context.newDocument', icon: 'filePlus' },
-    { id: 'import', labelKey: 'library.context.importToCategory', icon: 'attachment' },
   ]
   if (context.isVirtual) return items
 

@@ -15,8 +15,8 @@
     "smoke:p0:runtime": "node scripts/check-p0-smoke.mjs --runtime",
     "preview": "node scripts/preview.mjs",
     "test:e2e": "node scripts/e2e.mjs",
-    "package:win": "pnpm build && electron-builder --win nsis --x64 --publish never",
-    "package:dir": "pnpm build && electron-builder --win dir --x64"
+    "package:win": "pnpm build && electron-builder --win nsis --x64 --publish never --config.electronDist=node_modules/electron/dist",
+    "package:dir": "pnpm build && electron-builder --win dir --x64 --publish never --config.electronDist=node_modules/electron/dist"
   },
   "engines": {
     "node": ">=20"

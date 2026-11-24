@@ -8,6 +8,7 @@ import {
 
 export function validateDocumentSavePayload(value: unknown): DocumentSavePayload {
   const candidate = expectRecord(value, 'document payload')
+  const createdAt = expectOptionalTimestamp(candidate.createdAt, 'createdAt')
   return {
     id: expectNonEmptyString(candidate.id, 'id'),
     title: expectString(candidate.title, 'title'),
@@ -17,6 +18,10 @@ export function validateDocumentSavePayload(value: unknown): DocumentSavePayload
     content: validateContent(candidate.content),
     revision: expectNonNegativeInteger(candidate.revision, 'revision'),
     version: expectNonNegativeInteger(candidate.version, 'version'),
+    ...(createdAt ? { createdAt } : {}),
+    ...(candidate.sourceJournalId === undefined
+      ? {}
+      : { sourceJournalId: expectNullableId(candidate.sourceJournalId, 'sourceJournalId') }),
   }
 }
 
@@ -33,6 +38,7 @@ export function validateCategorySavePayload(value: unknown): CategorySavePayload
 
 export function validateJournalSavePayload(value: unknown): JournalSavePayload {
   const candidate = expectRecord(value, 'journal payload')
+  const createdAt = expectOptionalTimestamp(candidate.createdAt, 'createdAt')
   return {
     id: expectNonEmptyString(candidate.id, 'id'),
     title: expectString(candidate.title, 'title'),
@@ -40,6 +46,10 @@ export function validateJournalSavePayload(value: unknown): JournalSavePayload {
     content: validateContent(candidate.content),
     revision: expectNonNegativeInteger(candidate.revision, 'revision'),
     version: expectNonNegativeInteger(candidate.version, 'version'),
+    ...(createdAt ? { createdAt } : {}),
+    ...(candidate.documentId === undefined
+      ? {}
+      : { documentId: expectNullableId(candidate.documentId, 'documentId') }),
   }
 }
 
@@ -88,6 +98,15 @@ function expectBoolean(value: unknown, field: string): boolean {
 function expectOptionalBoolean(value: unknown, field: string): boolean {
   if (value === undefined) return false
   return expectBoolean(value, field)
+}
+
+/** Optional ISO timestamp; a value that cannot be parsed is a programming error. */
+function expectOptionalTimestamp(value: unknown, field: string): string | undefined {
+  if (value === undefined) return undefined
+  if (typeof value !== 'string' || Number.isNaN(Date.parse(value))) {
+    throw new TypeError(`${field} must be an ISO timestamp`)
+  }
+  return value
 }
 
 function expectNonNegativeInteger(value: unknown, field: string): number {

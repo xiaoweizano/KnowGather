@@ -51,4 +51,38 @@ describe('AtomicDocumentRepository', () => {
     expect(staleReceipt.revision).toBe(8)
     expect((await repository.get('doc-atomic'))?.title).toBe('最新')
   })
+
+  it('backdates a newly imported document and reports the creation', async () => {
+    const { repository } = await createRepository()
+    const backdated = '2024-05-22T04:00:00.000Z'
+    const receipt = await repository.save({ ...payload(0), createdAt: backdated })
+
+    expect(receipt.created).toBe(true)
+    expect(receipt.savedAt).toBe(backdated)
+    const stored = await repository.get('doc-atomic')
+    expect(stored?.createdAt).toBe(backdated)
+    expect(stored?.updatedAt).toBe(backdated)
+  })
+
+  it('ignores a backdated timestamp once the document exists', async () => {
+    const { repository } = await createRepository()
+    await repository.save(payload(1, '首次'))
+    const before = await repository.get('doc-atomic')
+
+    const receipt = await repository.save({ ...payload(2, '再次'), createdAt: '2024-05-22T04:00:00.000Z' })
+
+    expect(receipt.created).toBe(false)
+    const stored = await repository.get('doc-atomic')
+    expect(stored?.createdAt).toBe(before!.createdAt)
+    expect(stored?.updatedAt).not.toBe('2024-05-22T04:00:00.000Z')
+  })
+
+  it('ignores a future backdating hint', async () => {
+    const { repository } = await createRepository()
+    const future = new Date(Date.now() + 86_400_000).toISOString()
+    const receipt = await repository.save({ ...payload(0), createdAt: future })
+
+    expect(receipt.savedAt).not.toBe(future)
+    expect((await repository.get('doc-atomic'))?.updatedAt).not.toBe(future)
+  })
 })

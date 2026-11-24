@@ -41,4 +41,13 @@ describe('IPC business payload validation', () => {
       id: 'journal-1', title: '日志', categoryId: null, content, revision: 0, version: -2,
     })).toThrow()
   })
+
+  it('accepts an ISO createdAt hint and rejects a malformed one', () => {
+    const base = { id: 'doc-1', title: '标题', categoryId: null, tags: [], content, revision: 0, version: 1 }
+    expect(validateDocumentSavePayload({ ...base, createdAt: '2024-05-22T04:00:00.000Z' }).createdAt)
+      .toBe('2024-05-22T04:00:00.000Z')
+    expect(validateDocumentSavePayload(base).createdAt).toBeUndefined()
+    expect(() => validateDocumentSavePayload({ ...base, createdAt: 'last tuesday' })).toThrow()
+    expect(() => validateDocumentSavePayload({ ...base, createdAt: 20240522 })).toThrow()
+  })
 })

@@ -1,63 +1,82 @@
 import type { EditorCommand } from './editorCommands'
-import type { ToolbarLayoutItem } from './toolbarLayout'
 
-export interface ToolbarActionItem extends ToolbarLayoutItem {
-  key: EditorCommand | 'color' | 'link' | 'image' | 'table' | 'attachment'
+/**
+ * Toolbar composition, grouped the way Yuque groups it.
+ *
+ * Everyday actions are all visible on the bar; the folding-by-width behaviour is
+ * gone, so nothing common hides behind the "more" caret any more. Only rare
+ * commands (code block, focus mode) live there.
+ */
+export type ToolbarActionKey =
+  | EditorCommand
+  | 'color' | 'highlight' | 'link' | 'image' | 'table' | 'attachment' | 'task'
+  | 'textStyles' | 'align' | 'list' | 'indent' | 'painter' | 'outline' | 'plus'
+
+export interface ToolbarItem {
+  key: ToolbarActionKey
   /** i18n key resolved at render time so the label follows the locale. */
   labelKey: string
   shortcut?: string
   icon: string
   command?: EditorCommand
-  /** Toolbar actions that are display-only (fold/unfold) carry a dedicated id. */
-  action?: 'foldAll' | 'unfoldAll'
 }
 
-export const PRIMARY_TOOLBAR_ITEMS: readonly ToolbarActionItem[] = [
-  { key: 'bold', labelKey: 'editor.bold', shortcut: 'Ctrl+B', icon: 'bold', command: 'bold', width: 30, priority: 100 },
-  { key: 'italic', labelKey: 'editor.italic', shortcut: 'Ctrl+I', icon: 'italic', command: 'italic', width: 30, priority: 95 },
-  { key: 'link', labelKey: 'editor.link', shortcut: 'Ctrl+K', icon: 'link', width: 30, priority: 92 },
-  { key: 'underline', labelKey: 'editor.underline', shortcut: 'Ctrl+U', icon: 'underline', command: 'underline', width: 30, priority: 90 },
-  { key: 'color', labelKey: 'editor.toolbar.color', icon: 'palette', width: 32, priority: 75 },
-  { key: 'highlight', labelKey: 'editor.toolbar.highlight', icon: 'separator', command: 'highlight', width: 30, priority: 72 },
-  { key: 'bulletList', labelKey: 'editor.bulletList', shortcut: 'Ctrl+Shift+8', icon: 'list', command: 'bulletList', width: 30, priority: 70 },
-  { key: 'taskList', labelKey: 'editor.taskList', shortcut: 'Ctrl+Shift+9', icon: 'check', command: 'taskList', width: 30, priority: 68 },
-  { key: 'orderedList', labelKey: 'editor.orderedList', shortcut: 'Ctrl+Shift+7', icon: 'orderedList', command: 'orderedList', width: 30, priority: 65 },
-  { key: 'code', labelKey: 'editor.code', shortcut: 'Ctrl+E', icon: 'code', command: 'code', width: 30, priority: 60 },
-  { key: 'strike', labelKey: 'editor.strike', shortcut: 'Ctrl+Shift+S', icon: 'strike', command: 'strike', width: 30, priority: 55 },
-  { key: 'image', labelKey: 'editor.image', icon: 'image', width: 30, priority: 50 },
-  { key: 'table', labelKey: 'editor.table', icon: 'table', width: 30, priority: 48 },
-  { key: 'blockquote', labelKey: 'editor.blockquote', shortcut: 'Ctrl+Shift+B', icon: 'quote', command: 'blockquote', width: 30, priority: 45 },
-  { key: 'codeBlock', labelKey: 'editor.codeBlock', shortcut: 'Ctrl+Alt+C', icon: 'code', command: 'codeBlock', width: 30, priority: 40 },
-  { key: 'attachment', labelKey: 'editor.attachment', icon: 'attachment', width: 30, priority: 35 },
+/** Marks that stay one click away on the bar itself. */
+export const TEXT_GROUP: readonly ToolbarItem[] = [
+  { key: 'bold', labelKey: 'editor.bold', shortcut: 'Ctrl+B', icon: 'bold', command: 'bold' },
+  { key: 'italic', labelKey: 'editor.italic', shortcut: 'Ctrl+I', icon: 'italic', command: 'italic' },
+  { key: 'strike', labelKey: 'editor.strike', icon: 'strike', command: 'strike' },
+  { key: 'underline', labelKey: 'editor.underline', shortcut: 'Ctrl+U', icon: 'underline', command: 'underline' },
 ]
 
-export const MORE_TOOLBAR_ITEMS: readonly ToolbarActionItem[] = [
-  { key: 'alignLeft', labelKey: 'editor.alignLeft', shortcut: 'Ctrl+Shift+L', icon: 'alignLeft', command: 'alignLeft', width: 160, priority: 30 },
-  { key: 'alignCenter', labelKey: 'editor.alignCenter', shortcut: 'Ctrl+Shift+E', icon: 'alignCenter', command: 'alignCenter', width: 160, priority: 29 },
-  { key: 'alignRight', labelKey: 'editor.alignRight', shortcut: 'Ctrl+Shift+R', icon: 'alignRight', command: 'alignRight', width: 160, priority: 28 },
-  { key: 'alignJustify', labelKey: 'editor.alignJustify', icon: 'alignJustify', command: 'alignJustify', width: 160, priority: 27 },
-  { key: 'indent', labelKey: 'editor.indent', shortcut: 'Tab', icon: 'chevronRight', command: 'indent', width: 160, priority: 26 },
-  { key: 'outdent', labelKey: 'editor.outdent', shortcut: 'Shift+Tab', icon: 'chevronLeft', command: 'outdent', width: 160, priority: 25 },
-  { key: 'horizontalRule', labelKey: 'editor.horizontalRule', shortcut: '---', icon: 'separator', command: 'horizontalRule', width: 160, priority: 20 },
-  { key: 'clearFormatting', labelKey: 'editor.clearFormatting', shortcut: 'Ctrl+\\', icon: 'x', command: 'clearFormatting', width: 160, priority: 15 },
+/** Occasional marks folded under the "T" caret. */
+export const TEXT_STYLE_MENU: readonly ToolbarItem[] = [
+  { key: 'code', labelKey: 'editor.code', icon: 'code', command: 'code' },
+  { key: 'subscript', labelKey: 'editor.subscript', icon: 'subscript', command: 'subscript' },
+  { key: 'superscript', labelKey: 'editor.superscript', icon: 'superscript', command: 'superscript' },
+  { key: 'link', labelKey: 'editor.link', shortcut: 'Ctrl+K', icon: 'link' },
 ]
 
-export const TEXT_COLORS = [
-  { labelKey: 'editor.color.default', value: null },
-  { labelKey: 'editor.color.violet', value: '#6654dc' },
-  { labelKey: 'editor.color.blue', value: '#3278c7' },
-  { labelKey: 'editor.color.green', value: '#2b8a64' },
-  { labelKey: 'editor.color.orange', value: '#c56a2d' },
-  { labelKey: 'editor.color.red', value: '#c84b55' },
-  { labelKey: 'editor.color.gray', value: '#6f6a79' },
-] as const
+export const ALIGN_ITEMS: readonly ToolbarItem[] = [
+  { key: 'alignLeft', labelKey: 'editor.alignLeft', icon: 'alignLeft', command: 'alignLeft' },
+  { key: 'alignCenter', labelKey: 'editor.alignCenter', icon: 'alignCenter', command: 'alignCenter' },
+  { key: 'alignRight', labelKey: 'editor.alignRight', icon: 'alignRight', command: 'alignRight' },
+  { key: 'alignJustify', labelKey: 'editor.alignJustify', icon: 'alignJustify', command: 'alignJustify' },
+]
 
-export const HIGHLIGHT_COLORS = [
-  { labelKey: 'editor.highlight.none', value: null },
-  { labelKey: 'editor.highlight.softViolet', value: '#e7e1ff' },
-  { labelKey: 'editor.highlight.paleYellow', value: '#fff0a8' },
-  { labelKey: 'editor.highlight.lightBlue', value: '#dceeff' },
-  { labelKey: 'editor.highlight.mint', value: '#dff4e8' },
-  { labelKey: 'editor.highlight.apricot', value: '#ffe4cf' },
-  { labelKey: 'editor.highlight.softPink', value: '#ffdce5' },
-] as const
+export const LIST_ITEMS: readonly ToolbarItem[] = [
+  { key: 'bulletList', labelKey: 'editor.bulletList', icon: 'list', command: 'bulletList' },
+  { key: 'orderedList', labelKey: 'editor.orderedList', icon: 'orderedList', command: 'orderedList' },
+  { key: 'taskList', labelKey: 'editor.taskList', icon: 'check', command: 'taskList' },
+]
+
+export const INDENT_ITEMS: readonly ToolbarItem[] = [
+  { key: 'indent', labelKey: 'editor.indent', shortcut: 'Tab', icon: 'indentIncrease', command: 'indent' },
+  { key: 'outdent', labelKey: 'editor.outdent', shortcut: 'Shift+Tab', icon: 'indentDecrease', command: 'outdent' },
+]
+
+/** Block inserts: checklist, attachment, quote, divider — the compact left set. */
+export const INSERT_GROUP: readonly ToolbarItem[] = [
+  { key: 'task', labelKey: 'editor.insert.checklistBlock', icon: 'checkSquare', command: 'taskList' },
+  { key: 'attachment', labelKey: 'editor.attachment', icon: 'attachment' },
+  { key: 'blockquote', labelKey: 'editor.blockquote', icon: 'quote', command: 'blockquote' },
+  { key: 'horizontalRule', labelKey: 'editor.horizontalRule', icon: 'separator', command: 'horizontalRule' },
+]
+
+/** Everything reachable from the "+" menu: blocks, media, then the rule. */
+export const INSERT_MENU_ITEMS: readonly ToolbarItem[] = [
+  ...INSERT_GROUP,
+  { key: 'table', labelKey: 'editor.table', icon: 'table' },
+  { key: 'image', labelKey: 'editor.image', icon: 'image' },
+]
+
+/** Right-hand group: view switches. Media inserts live in the "+" menu. */
+export const VIEW_GROUP: readonly ToolbarItem[] = [
+  { key: 'outline', labelKey: 'editor.outline.title', icon: 'outline' },
+]
+
+/** Rare commands; the only things left behind the "more" caret. */
+export const MORE_TOOLBAR_ITEMS: readonly ToolbarItem[] = [
+  { key: 'clearFormatting', labelKey: 'editor.clearFormatting', shortcut: 'Ctrl+\\', icon: 'x', command: 'clearFormatting' },
+  { key: 'codeBlock', labelKey: 'editor.codeBlock', shortcut: 'Ctrl+Alt+C', icon: 'code', command: 'codeBlock' },
+]

@@ -20,10 +20,15 @@ export type CategoryDraftValidation =
   | { valid: true; name: string }
   | { valid: false; name: string; error: string; errorKey: string }
 
+/**
+ * Categories tree for the library. Journals still count towards the tree when
+ * they are passed in (the journal list shares the same category totals), but
+ * the library sidebar itself only shows documents.
+ */
 export function buildKnowledgeCategoryTree(
   categories: readonly CategoryRecord[],
   documents: readonly DocumentRecord[],
-  journals: readonly JournalRecord[],
+  journals: readonly JournalRecord[] = [],
 ): KnowledgeCategoryNode[] {
   const records = [...documents, ...journals]
   const countFor = (categoryId: string | null): number =>

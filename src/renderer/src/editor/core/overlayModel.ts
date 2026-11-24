@@ -17,9 +17,12 @@ export interface SlashMenuItem {
 
 export const SLASH_MENU_ITEMS: readonly SlashMenuItem[] = [
   { key: 'paragraph', labelKey: 'editor.block.paragraph', descriptionKey: 'editor.slash.paragraphDesc', icon: 'edit', keywords: ['text', 'p', '正文', '段落'], command: 'paragraph' },
-  { key: 'heading1', labelKey: 'editor.block.heading1', descriptionKey: 'editor.slash.heading1Desc', icon: 'heading', keywords: ['h1', 'title', 'heading', '标题'], command: 'heading1' },
-  { key: 'heading2', labelKey: 'editor.block.heading2', descriptionKey: 'editor.slash.heading2Desc', icon: 'heading', keywords: ['h2', 'title', 'heading', '标题'], command: 'heading2' },
-  { key: 'heading3', labelKey: 'editor.block.heading3', descriptionKey: 'editor.slash.heading3Desc', icon: 'heading', keywords: ['h3', 'title', 'heading', '标题'], command: 'heading3' },
+  { key: 'heading1', labelKey: 'editor.block.heading1', descriptionKey: 'editor.slash.headingDesc', icon: 'heading', keywords: ['h1', 'title', 'heading', '标题'], command: 'heading1' },
+  { key: 'heading2', labelKey: 'editor.block.heading2', descriptionKey: 'editor.slash.headingDesc', icon: 'heading', keywords: ['h2', 'title', 'heading', '标题'], command: 'heading2' },
+  { key: 'heading3', labelKey: 'editor.block.heading3', descriptionKey: 'editor.slash.headingDesc', icon: 'heading', keywords: ['h3', 'title', 'heading', '标题'], command: 'heading3' },
+  { key: 'heading4', labelKey: 'editor.block.heading4', descriptionKey: 'editor.slash.headingDesc', icon: 'heading', keywords: ['h4', 'title', 'heading', '标题'], command: 'heading4' },
+  { key: 'heading5', labelKey: 'editor.block.heading5', descriptionKey: 'editor.slash.headingDesc', icon: 'heading', keywords: ['h5', 'title', 'heading', '标题'], command: 'heading5' },
+  { key: 'heading6', labelKey: 'editor.block.heading6', descriptionKey: 'editor.slash.headingDesc', icon: 'heading', keywords: ['h6', 'title', 'heading', '标题'], command: 'heading6' },
   { key: 'bulletList', labelKey: 'editor.bulletList', descriptionKey: 'editor.slash.bulletListDesc', icon: 'list', keywords: ['list', 'ul', 'bulleted', '列表', '无序'], command: 'bulletList' },
   { key: 'orderedList', labelKey: 'editor.orderedList', descriptionKey: 'editor.slash.orderedListDesc', icon: 'orderedList', keywords: ['list', 'ol', 'numbered', '列表', '有序'], command: 'orderedList' },
   { key: 'taskList', labelKey: 'editor.taskList', descriptionKey: 'editor.slash.taskListDesc', icon: 'check', keywords: ['todo', 'task', '任务', '待办'], command: 'taskList' },

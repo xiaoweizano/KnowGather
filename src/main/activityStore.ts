@@ -17,7 +17,9 @@ export interface ActivitySeedSource {
 const EMPTY_ACTIVITY = (): ActivityFile => ({ schemaVersion: 1, seeded: false, days: {} })
 
 const DAY_KEY_PATTERN = /^\d{4}-\d{2}-\d{2}$/
-const MAX_TRACKED_DAYS = 800
+// Imported history can span decades of daily notes, so the cap only guards
+// against unbounded growth from a broken clock rather than trimming real days.
+const MAX_TRACKED_DAYS = 7300
 
 /**
  * Records daily editing activity for the home heatmap.

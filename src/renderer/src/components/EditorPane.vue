@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, shallowRef } from 'vue'
 import type { Editor } from '@tiptap/core'
 import type { TiptapDocument } from '../../../shared/document'
 import EditorToolbar from '../editor/components/EditorToolbar.vue'
@@ -32,7 +32,10 @@ const emit = defineEmits<{
 
 const ui = useUiStore()
 const canvas = ref<{ getEditor: () => Editor | null } | null>(null)
-const editor = ref<Editor | null>(null)
+// The editor instance must stay raw: Vue's reactive proxy breaks ProseMirror
+// transactions ("Applying a mismatched transaction"), which silently killed
+// every toolbar command that ran through the proxied instance.
+const editor = shallowRef<Editor | null>(null)
 const outline = ref<{ refresh: () => void } | null>(null)
 
 const outlineVisible = computed(() => ui.outlineVisible && Boolean(editor.value))
@@ -87,6 +90,7 @@ defineExpose({ getEditor, focus, refreshOutline })
         @request-image="emit('requestImage')"
         @request-attachment="emit('requestAttachment')"
         @insert-table="emit('insertTable')"
+        @notify="emit('notify', $event)"
         @settings-change="handleSettingsChange"
       />
       <OutlinePanel

@@ -176,6 +176,9 @@ onBeforeUnmount(() => {
     </div>
 
     <div class="tag-row">
+      <span v-if="document.sourceJournalId" class="source-chip">
+        <AppIcon name="journal" :size="12" /> {{ t('document.sourceJournal') }}
+      </span>
       <span v-for="tag in document.tags" :key="tag" class="tag-chip">
         {{ tag }}
         <button
@@ -365,6 +368,19 @@ onBeforeUnmount(() => {
   border-radius: 999px;
   background: #e9e5ff;
   color: #6956dd;
+  font-size: 9px;
+  font-weight: 600;
+}
+
+.source-chip {
+  display: inline-flex;
+  height: 20px;
+  align-items: center;
+  gap: 4px;
+  padding: 0 9px;
+  border-radius: 999px;
+  background: var(--state-success-bg);
+  color: var(--state-success-fg);
   font-size: 9px;
   font-weight: 600;
 }

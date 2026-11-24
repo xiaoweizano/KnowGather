@@ -5,7 +5,9 @@ import {
   nodeSize,
 } from '../src/renderer/src/app/outline'
 import {
+  activityYears,
   buildHeatmap,
+  buildYearHeatmap,
   heatLevel,
   computeStreak,
   countThisWeek,
@@ -36,14 +38,16 @@ describe('outline collection', () => {
     expect(outline[1]!.pos).toBe(8)
   })
 
-  it('skips levels outside 1–3 and empty headings still appear', () => {
+  it('collects headings down to level 6 and ignores anything deeper', () => {
     const outline = collectOutline(doc([
       { type: 'heading', attrs: { level: 4 }, content: [{ type: 'text', text: '四级' }] },
       { type: 'heading', attrs: { level: 3 } },
+      { type: 'heading', attrs: { level: 6 }, content: [{ type: 'text', text: '六级' }] },
+      { type: 'heading', attrs: { level: 7 }, content: [{ type: 'text', text: '越界' }] },
     ]))
 
-    expect(outline).toHaveLength(1)
-    expect(outline[0]).toMatchObject({ level: 3, text: '' })
+    expect(outline.map((item) => item.level)).toEqual([4, 3, 6])
+    expect(outline[1]).toMatchObject({ level: 3, text: '' })
   })
 
   it('finds headings nested inside blockquotes', () => {
@@ -149,5 +153,57 @@ describe('activity heatmap', () => {
   it('builds a five-step legend', () => {
     expect(heatLegend(8).map((entry) => entry.level)).toEqual([0, 1, 2, 3, 4])
     expect(heatLegend(8)[4]!.count).toBe(8)
+  })
+
+  it('aligns a past year to whole weeks from January to December', () => {
+    const model = buildYearHeatmap(days({ '2025-03-05': 2, '2025-03-06': 1 }), 2025, today)
+
+    const first = model.weeks[0]!.cells
+    const last = model.weeks.at(-1)!.cells
+    // 2025-01-01 is a Wednesday, so the first column pads Sunday through Tuesday.
+    expect(first.find((cell) => cell.date)!.key).toBe('2025-01-01')
+    expect(first.filter((cell) => cell.pad === 'start')).toHaveLength(3)
+    // 2025-12-31 is a Wednesday, so the final column starts on Sunday the 28th
+    // and pads Thursday through Saturday.
+    expect(last.find((cell) => cell.date)!.key).toBe('2025-12-28')
+    expect(last.filter((cell) => cell.pad === 'end')).toHaveLength(3)
+    expect(model.totalEdits).toBe(3)
+    expect(model.activeDays).toBe(2)
+    // The streak ends at December 31st of the selected year, which is empty.
+    expect(model.streak).toBe(0)
+  })
+
+  it('clips the running year at today instead of painting the future', () => {
+    const model = buildYearHeatmap(days({ '2026-11-13': 1 }), 2026, today)
+
+    const cells = model.weeks.flatMap((week) => week.cells)
+    expect(cells.filter((cell) => cell.date).at(-1)!.key).toBe('2026-11-13')
+    expect(cells.filter((cell) => cell.pad === 'end').length).toBeGreaterThan(0)
+    expect(model.totalEdits).toBe(1)
+    expect(model.thisWeek).toBe(1)
+  })
+
+  it('only counts edits inside the selected year', () => {
+    const model = buildYearHeatmap(days({ '2024-12-31': 5, '2025-01-02': 2 }), 2025, today)
+
+    expect(model.totalEdits).toBe(2)
+    expect(model.max).toBe(2)
+  })
+
+  it('reports the longest run inside the selected year', () => {
+    const model = buildYearHeatmap(
+      days({ '2025-04-01': 1, '2025-04-02': 1, '2025-04-03': 1, '2025-07-09': 1 }),
+      2025,
+      today,
+    )
+
+    expect(model.bestStreak).toBe(3)
+    expect(model.streak).toBe(0)
+  })
+
+  it('lists years with activity plus the current one, newest first', () => {
+    const model = days({ '2023-05-01': 1, '2025-02-02': 3, '2024-01-01': 0 })
+
+    expect(activityYears(model, today)).toEqual([2026, 2025, 2023])
   })
 })

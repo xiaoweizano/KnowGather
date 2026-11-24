@@ -7,6 +7,7 @@ import { getShizhiApi } from '../services/api'
 import ContextMenu from './ContextMenu.vue'
 import PromptDialog from './PromptDialog.vue'
 import ConfirmDialog from './ConfirmDialog.vue'
+import JournalPickerDialog from './JournalPickerDialog.vue'
 import { useI18n } from '../i18n/useI18n'
 import {
   buildCategoryMenu,
@@ -35,7 +36,6 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   retryLoad: []
-  importDocuments: [categoryId?: string | null]
   notify: [message: string]
 }>()
 
@@ -54,6 +54,9 @@ const categoryError = ref<string | null>(null)
 const searchInput = ref<HTMLInputElement | null>(null)
 const categoryMenu = ref<HTMLElement | null>(null)
 const categoryInput = ref<HTMLInputElement | null>(null)
+const createMenuOpen = ref(false)
+const journalPickerOpen = ref(false)
+const creatingFromJournal = ref(false)
 const recentLimit = 5
 const contextMenu = ref<{ open: boolean; x: number; y: number; items: ContextMenuItem[] }>({
   open: false, x: 0, y: 0, items: [],
@@ -64,12 +67,13 @@ const promptError = ref<string | null>(null)
 const categoryTree = computed(() => buildKnowledgeCategoryTree(
   documentStore.categories,
   documentStore.documents,
-  documentStore.journals,
+  // Journals live on the journal page; the library tree counts documents only.
+  [],
 ))
 
 const filteredEntries = computed(() => filterKnowledgeEntries(
   documentStore.documents,
-  documentStore.journals,
+  [],
   { categoryId: selectedCategoryId.value, query: query.value },
 ))
 
@@ -176,9 +180,6 @@ async function handleContextSelect(item: ContextMenuItem): Promise<void> {
   switch (item.id) {
     case 'new-document':
       await createDocument()
-      return
-    case 'import':
-      emit('importDocuments', selectedCategoryId.value === 'all' ? null : selectedCategoryId.value)
       return
     case 'open':
       if (entry) selectEntry(entry)
@@ -299,6 +300,28 @@ async function createDocument(): Promise<void> {
   }
 }
 
+function openJournalPicker(): void {
+  journalPickerOpen.value = true
+}
+
+/** Promotes a journal into a new document and opens it in the editor. */
+async function createFromJournal(options: { journalId: string; title: string; categoryId: string | null }): Promise<void> {
+  if (creatingFromJournal.value) return
+  creatingFromJournal.value = true
+  try {
+    const document = await documentStore.createDocumentFromJournal(options)
+    if (!document) {
+      emit('notify', documentStore.error ?? t('journal.promoteFailed'))
+      return
+    }
+    journalPickerOpen.value = false
+    selectedCategoryId.value = 'all'
+    emit('notify', t('journal.promoted'))
+  } finally {
+    creatingFromJournal.value = false
+  }
+}
+
 async function openCategoryMenu(): Promise<void> {
   categoryError.value = null
   categoryDraft.value = ''
@@ -364,9 +387,13 @@ function handleGlobalKeydown(event: KeyboardEvent): void {
 }
 
 function handlePointerDown(event: PointerEvent): void {
-  if (!categoryMenuOpen.value) return
-  if (shouldDismissLayer(event, event.target, '.category-popover, .new-category-button')) {
-    closeCategoryMenu()
+  if (categoryMenuOpen.value) {
+    if (shouldDismissLayer(event, event.target, '.category-popover, .new-category-button')) {
+      closeCategoryMenu()
+    }
+  }
+  if (createMenuOpen.value && shouldDismissLayer(event, event.target, '.create-menu, .create-anchor')) {
+    createMenuOpen.value = false
   }
 }
 
@@ -386,17 +413,6 @@ onBeforeUnmount(() => {
     <header class="resource-heading">
       <h1>{{ t('library.title') }}</h1>
       <div class="resource-actions">
-        <button
-          type="button"
-          class="subtle-round"
-          :title="t('library.importTitle')"
-          :aria-label="t('library.importTitle')"
-          data-testid="sidebar-import"
-          :disabled="Boolean(props.loadError) || props.initializing"
-          @click="emit('importDocuments')"
-        >
-          <AppIcon name="filePlus" :size="15" />
-        </button>
         <div class="category-menu-anchor">
           <button
             type="button"
@@ -436,17 +452,29 @@ onBeforeUnmount(() => {
             </div>
           </form>
         </div>
-        <button
-          type="button"
-          class="add-round"
-          :title="t('library.newDocumentTitle')"
-          :aria-label="t('library.newDocumentTitle')"
-          data-testid="sidebar-new-document"
-          :disabled="creatingDocument || Boolean(props.loadError) || props.initializing"
-          @click="createDocument"
-        >
-          <AppIcon name="plus" :size="18" />
-        </button>
+        <div class="category-menu-anchor create-anchor">
+          <button
+            type="button"
+            class="add-round"
+            :title="t('library.newDocumentTitle')"
+            :aria-label="t('library.newDocumentTitle')"
+            aria-haspopup="menu"
+            :aria-expanded="createMenuOpen"
+            data-testid="sidebar-new-document"
+            :disabled="creatingDocument || Boolean(props.loadError) || props.initializing"
+            @click="createMenuOpen = !createMenuOpen"
+          >
+            <AppIcon name="plus" :size="18" />
+          </button>
+          <div v-if="createMenuOpen" class="create-menu" role="menu">
+            <button type="button" role="menuitem" @click="createMenuOpen = false; createDocument()">
+              <AppIcon name="filePlus" :size="14" /> {{ t('library.newBlankDocument') }}
+            </button>
+            <button type="button" role="menuitem" @click="createMenuOpen = false; openJournalPicker()">
+              <AppIcon name="journal" :size="14" /> {{ t('library.newFromJournal') }}
+            </button>
+          </div>
+        </div>
       </div>
     </header>
 
@@ -583,6 +611,16 @@ onBeforeUnmount(() => {
       :confirm-label="t('common.delete')"
       @confirm="confirmDelete"
       @close="pendingAction = null"
+    />
+
+    <JournalPickerDialog
+      :open="journalPickerOpen"
+      :journals="documentStore.journals"
+      :categories="documentStore.categories"
+      :default-category-id="selectedCategoryId === 'all' ? null : selectedCategoryId"
+      :busy="creatingFromJournal"
+      @submit="createFromJournal"
+      @close="journalPickerOpen = false"
     />
   </aside>
 </template>
@@ -953,6 +991,38 @@ onBeforeUnmount(() => {
   }
 }
 .category-menu-anchor { position: relative; }
+.create-anchor { display: flex; }
+.create-menu {
+  position: absolute;
+  z-index: 30;
+  top: 33px;
+  right: 0;
+  display: flex;
+  width: 176px;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px;
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  background: var(--panel-strong);
+  box-shadow: 0 14px 38px rgba(46, 37, 82, .16);
+}
+.create-menu button {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 8px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+  font: inherit;
+  font-size: 11.5px;
+  text-align: left;
+  white-space: nowrap;
+}
+.create-menu button:hover { background: var(--panel-muted); }
 .subtle-round.active { border-color: var(--accent-soft-border); background: var(--accent-soft-bg); color: var(--accent-strong); }
 .subtle-round:disabled, .add-round:disabled { cursor: wait; opacity: .5; }
 .category-popover {

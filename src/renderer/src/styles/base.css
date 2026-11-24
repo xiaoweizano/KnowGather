@@ -3,6 +3,11 @@
   font-size: var(--ui-font-size, 13px);
   color: #29263a;
   background: #f2f1f8;
+  /*
+   * Chinese UI fonts ship no italic face, so `font-synthesis: none` made every
+   * italic run render upright — the mark was applied but invisible. Synthesis
+   * is allowed for the editor body below; UI chrome keeps no synthesis.
+   */
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -284,6 +289,12 @@ textarea:focus-visible,
 [tabindex]:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--accent) 68%, transparent);
   outline-offset: 2px;
+}
+
+/* The document body is one large tab stop; its own caret is the focus cue. */
+.shizhi-editor:focus-visible,
+.shizhi-editor [contenteditable="true"]:focus-visible {
+  outline: none;
 }
 
 /* ---------------------------------------------------------------- motion */

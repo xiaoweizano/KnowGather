@@ -9,6 +9,9 @@
   word-break: break-word;
   tab-size: 2;
   position: relative;
+  /* The UI layer disables synthesis; the body must override it or bold/italic
+     Chinese text renders indistinguishable from plain text. */
+  font-synthesis: style weight;
 }
 
 .shizhi-editor,
@@ -67,12 +70,42 @@
 }
 
 .shizhi-editor h4 {
-  font-size: 1.05em;
+  font-size: 1.02em;
 }
 
-.shizhi-editor h5,
+.shizhi-editor h5 {
+  font-size: 0.98em;
+}
+
 .shizhi-editor h6 {
-  font-size: 1em;
+  color: #57536a;
+  font-size: 0.94em;
+  letter-spacing: 0.01em;
+}
+
+.shizhi-editor sub,
+.shizhi-editor sup {
+  font-size: 0.74em;
+  line-height: 0;
+}
+
+/*
+ * Chinese fonts ship no italic face and Chrome refuses to synthesise one for
+ * them (`oblique`/`font-synthesis: style` are no-ops on CJK glyphs), so an
+ * italic run looked exactly like plain text. Latin text still uses the real
+ * italic face; the skew only supplies the slant the CJK glyphs cannot get.
+ */
+.shizhi-editor em {
+  display: inline-block;
+  max-width: 100%;
+  transform: skewX(-10deg);
+  transform-origin: center;
+}
+
+/* Inline font sizes come from the text-style mark, so they must win over the
+   block's own size without affecting headings that were never resized. */
+.shizhi-editor span[style*='font-size'] {
+  line-height: 1.4;
 }
 
 .shizhi-editor > :first-child {
@@ -100,29 +133,27 @@
 }
 
 .shizhi-editor blockquote {
-  position: relative;
-  margin: 1.18em 0 1.35em;
-  padding: 1.05em 1.25em 1.05em 1.45em;
-  border: 1px solid #ebe6ff;
-  border-radius: 12px;
-  background: linear-gradient(135deg, #f8f5ff 0%, #f1efff 100%);
-  color: #4d4863;
+  margin: 0.85em 0 1em;
+  padding: 0.12em 0 0.12em 0.95em;
+  border-left: 2px solid #ddd9e6;
+  border-radius: 0;
+  background: none;
+  color: #6b6678;
 }
 
-.shizhi-editor blockquote::before {
-  position: absolute;
-  top: 12px;
-  bottom: 12px;
-  left: 0;
-  width: 4px;
-  border-radius: 0 4px 4px 0;
-  background: linear-gradient(180deg, #9b8cff, #7060e4);
-  content: "";
+/* First/last children would otherwise keep their own margins, which re-creates
+   the tall empty band the plain left-bar style is meant to avoid. */
+.shizhi-editor blockquote > :first-child {
+  margin-top: 0;
+}
+
+.shizhi-editor blockquote > :last-child {
+  margin-bottom: 0;
 }
 
 .shizhi-editor blockquote p:first-child {
-  color: #343044;
-  font-weight: 700;
+  color: inherit;
+  font-weight: inherit;
 }
 
 .shizhi-editor blockquote p:last-child {
@@ -376,13 +407,13 @@
 }
 
 :root[data-theme="dark"] .shizhi-editor blockquote {
-  border-color: #3a3452;
-  background: linear-gradient(135deg, #29243e 0%, #252136 100%);
-  color: #c9c3d8;
+  border-left-color: #47415c;
+  background: none;
+  color: #a9a3ba;
 }
 
 :root[data-theme="dark"] .shizhi-editor blockquote p:first-child {
-  color: #e8e2f7;
+  color: inherit;
 }
 
 :root[data-theme="dark"] .shizhi-editor code {

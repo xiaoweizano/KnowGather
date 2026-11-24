@@ -1,17 +1,17 @@
 import type { TiptapDocument, TiptapNode } from '../../../shared/document'
 
 export interface OutlineItem {
-  /** Heading level: 1–3, matching the editor's heading extension. */
-  level: 1 | 2 | 3
+  /** Heading level: 1–6, matching the editor's heading extension. */
+  level: 1 | 2 | 3 | 4 | 5 | 6
   text: string
   /** Absolute document position of the heading node. */
   pos: number
 }
 
-export const OUTLINE_LEVELS = [1, 2, 3] as const
+export const OUTLINE_LEVELS = [1, 2, 3, 4, 5, 6] as const
 
 /**
- * Collects H1–H3 headings in document order with their absolute positions.
+ * Collects H1–H6 headings in document order with their absolute positions.
  *
  * Positions follow ProseMirror's own arithmetic: a node's first child starts one
  * position after the node, and each child occupies its `nodeSize` (text length
@@ -24,8 +24,8 @@ export function collectOutline(document: TiptapDocument): OutlineItem[] {
   const walk = (node: TiptapNode, pos: number): void => {
     const isHeading = node.type === 'heading'
     const level = isHeading ? Number(node.attrs?.level) : 0
-    if (isHeading && (level === 1 || level === 2 || level === 3)) {
-      items.push({ level, text: nodeText(node).trim(), pos })
+    if (isHeading && level >= 1 && level <= 6) {
+      items.push({ level: level as OutlineItem['level'], text: nodeText(node).trim(), pos })
     }
     if (!node.content) return
     let childPos = pos + 1

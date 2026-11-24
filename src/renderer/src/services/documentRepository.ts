@@ -66,10 +66,16 @@ export class BrowserDocumentRepository implements KnowledgeRepository {
   async save(payload: DocumentSavePayload): Promise<SaveReceipt> {
     const database = this.readDatabase()
     const current = database.documents[payload.id]
-    if (current?.deletedAt === null && current.revision > payload.revision) {
-      return { revision: current.revision, version: current.version, savedAt: current.updatedAt }
+    // A tombstoned record never accepts a save, mirroring the main process.
+    if (current && current.deletedAt !== null) {
+      return { revision: current.revision, version: current.version, savedAt: current.updatedAt, created: false }
+    }
+    if (current && current.revision > payload.revision) {
+      return { revision: current.revision, version: current.version, savedAt: current.updatedAt, created: false }
     }
     const now = new Date().toISOString()
+    // Backdating only applies on creation; later edits move to the present.
+    const backdated = !current && isPastTimestamp(payload.createdAt, now) ? payload.createdAt : null
     const record: DocumentRecord = {
       id: payload.id,
       title: payload.title.trim() || '无标题文档',
@@ -79,13 +85,14 @@ export class BrowserDocumentRepository implements KnowledgeRepository {
       content: clone(payload.content),
       revision: payload.revision,
       version: Math.max(payload.version, (current?.version ?? 0) + 1),
-      createdAt: current?.createdAt ?? now,
-      updatedAt: now,
+      createdAt: current?.createdAt ?? backdated ?? now,
+      updatedAt: backdated ?? now,
       deletedAt: null,
+      sourceJournalId: payload.sourceJournalId ?? current?.sourceJournalId ?? null,
     }
     database.documents[record.id] = record
     this.writeDatabase(database)
-    return { revision: record.revision, version: record.version, savedAt: now }
+    return { revision: record.revision, version: record.version, savedAt: record.updatedAt, created: !current }
   }
 
   async remove(id: string): Promise<void> {
@@ -161,10 +168,17 @@ export class BrowserDocumentRepository implements KnowledgeRepository {
   async saveJournal(payload: JournalSavePayload): Promise<SaveReceipt> {
     const database = this.readDatabase()
     const current = database.journalEntries[payload.id]
-    if (current?.deletedAt === null && current.revision > payload.revision) {
-      return { revision: current.revision, version: current.version, savedAt: current.updatedAt }
+    // A tombstoned entry never accepts a save, mirroring the main process.
+    if (current && current.deletedAt !== null) {
+      return { revision: current.revision, version: current.version, savedAt: current.updatedAt, created: false }
+    }
+    if (current && current.revision > payload.revision) {
+      return { revision: current.revision, version: current.version, savedAt: current.updatedAt, created: false }
     }
     const now = new Date().toISOString()
+    // Same rule as documents: the first save may carry the day the entry was
+    // written on; later edits move to the present.
+    const backdated = !current && isPastTimestamp(payload.createdAt, now) ? payload.createdAt : null
     const record: JournalRecord = {
       id: payload.id,
       title: payload.title.trim() || '无标题日志',
@@ -172,13 +186,14 @@ export class BrowserDocumentRepository implements KnowledgeRepository {
       categoryId: payload.categoryId,
       revision: payload.revision,
       version: Math.max(payload.version, (current?.version ?? 0) + 1),
-      createdAt: current?.createdAt ?? now,
-      updatedAt: now,
+      createdAt: current?.createdAt ?? backdated ?? now,
+      updatedAt: backdated ?? now,
       deletedAt: null,
+      documentId: payload.documentId ?? current?.documentId ?? null,
     }
     database.journalEntries[record.id] = record
     this.writeDatabase(database)
-    return { revision: record.revision, version: record.version, savedAt: now }
+    return { revision: record.revision, version: record.version, savedAt: record.updatedAt, created: !current }
   }
 
   async removeJournal(id: string): Promise<void> {
@@ -210,7 +225,16 @@ export class BrowserDocumentRepository implements KnowledgeRepository {
     if (!isRecord(parsed.documents) || !isRecord(parsed.categories) || !isRecord(parsed.journalEntries)) {
       throw new Error('Invalid knowledge database collections')
     }
-    return parsed as unknown as KnowledgeDatabaseV2
+    const database = parsed as unknown as KnowledgeDatabaseV2
+    // The main process coerces missing link fields to null on read; mirror that
+    // so both backends hand the renderer the same shape.
+    for (const document of Object.values(database.documents)) {
+      if (document.sourceJournalId === undefined) document.sourceJournalId = null
+    }
+    for (const journal of Object.values(database.journalEntries)) {
+      if (journal.documentId === undefined) journal.documentId = null
+    }
+    return database
   }
 
   private readLegacyDatabase(): KnowledgeDatabaseV2 {
@@ -248,6 +272,13 @@ function isDocumentRecord(value: unknown): value is DocumentRecord {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+/** Future timestamps are ignored rather than rejected: the clock may be off. */
+function isPastTimestamp(value: string | undefined, now: string): value is string {
+  if (!value) return false
+  const time = Date.parse(value)
+  return Number.isFinite(time) && time <= Date.parse(now)
 }
 
 function clone<T>(value: T): T {

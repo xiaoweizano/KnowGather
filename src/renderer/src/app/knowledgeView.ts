@@ -93,6 +93,12 @@ export function formatKnowledgeUpdatedAt(value: string, now = new Date(), locale
   const month = Number(new Intl.DateTimeFormat(activeLocale, { month: '2-digit' }).format(date).replace(/\D/g, ''))
   // Keep the two-digit day so dates line up in dense lists (`11月01日`, `11/01`).
   const day = String(new Intl.DateTimeFormat(activeLocale, { day: '2-digit' }).format(date).replace(/\D/g, ''))
+  // Imported history can be years old, where a bare month/day would read as
+  // this year's date.
+  if (date.getFullYear() !== now.getFullYear()) {
+    const paddedMonth = String(month).padStart(2, '0')
+    return translateIn(activeLocale, 'time.yearMonthDay', { year: date.getFullYear(), month: paddedMonth, day })
+  }
   return translateIn(activeLocale, 'time.monthDay', { month, day })
 }
 

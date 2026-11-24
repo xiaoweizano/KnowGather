@@ -52,6 +52,38 @@ describe('document editor page shell', () => {
     expect(journal).toContain('EditorPane')
   })
 
+  it('starts on the journal and puts it first in the rail', () => {
+    const page = source(pagePath)
+    const rail = source(navigationPath)
+
+    expect(page).toContain("const activeNavigation = ref<NavigationKey>('journal')")
+    expect(page).toContain('openJournalForDay(todayDayKey(), { create: false })')
+    expect(rail).toContain("labelKey: 'nav.journal'")
+    expect(rail.indexOf("'nav.journal'")).toBeLessThan((rail.indexOf("'nav.library'")))
+  })
+
+  it('lets the heatmap open and create the entry for a day', () => {
+    const page = source(pagePath)
+    const journal = source(journalPath)
+    const heatmap = source(fileURLToPath(new URL('../src/renderer/src/components/ActivityHeatmap.vue', import.meta.url)))
+
+    expect(heatmap).toContain("emit('selectDay', cell.key)")
+    expect(journal).toContain('@select-day="emit(\'openDay\', $event)"')
+    expect(page).toContain('handleOpenJournalDay')
+    expect(page).toContain('@open-journal-day="handleOpenJournalDay"')
+  })
+
+  it('writes today\'s entry from the home page instead of jumping into the library', () => {
+    const page = source(pagePath)
+    const home = source(fileURLToPath(new URL('../src/renderer/src/components/HomePage.vue', import.meta.url)))
+
+    expect(home).toContain("t('home.writeJournal')")
+    expect(home).toContain("emit('openJournalDay', todayDayKey())")
+    expect(home).not.toContain("emit('createDocument')")
+    expect(page).not.toContain('@create-document="handleHomeCreateDocument"')
+  })
+
+
   it('shows the real local journal count and uses the IME-safe search shortcut', () => {
     const rail = source(navigationPath)
     const sidebar = source(sidebarPath)
@@ -61,4 +93,17 @@ describe('document editor page shell', () => {
     expect(sidebar).toContain('shouldFocusKnowledgeSearch')
     expect(sidebar).toContain('shouldFocusKnowledgeSearch(event)')
   })
+
+  it('keeps the library to documents and promotes journals from the journal page', () => {
+    const sidebar = source(sidebarPath)
+    const journal = source(journalPath)
+
+    // Journals are browsed on their own page; the sidebar only lists documents.
+    expect(sidebar).toContain('buildKnowledgeCategoryTree(')
+    expect(sidebar).not.toContain('documentStore.journals,')
+    expect(sidebar).toContain("t('library.newFromJournal')")
+    expect(journal).toContain("t('journal.promote')")
+    expect(journal).toContain('promoteJournalToDocument')
+  })
+
 })

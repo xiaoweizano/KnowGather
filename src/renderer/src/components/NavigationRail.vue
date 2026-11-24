@@ -27,8 +27,9 @@ const railStyle = computed(() => ({
 
 const navigation: Array<{ id: NavigationKey; labelKey: string; icon: string }> = [
   { id: 'home', labelKey: 'nav.home', icon: 'home' },
-  { id: 'library', labelKey: 'nav.library', icon: 'library' },
+  // Journal first: it is the daily surface; the library collects what is kept.
   { id: 'journal', labelKey: 'nav.journal', icon: 'journal' },
+  { id: 'library', labelKey: 'nav.library', icon: 'library' },
   { id: 'assistant', labelKey: 'nav.assistant', icon: 'sparkles' },
   { id: 'settings', labelKey: 'nav.settings', icon: 'settings' },
 ]

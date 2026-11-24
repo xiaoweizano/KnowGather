@@ -128,6 +128,8 @@ function applyMarks(text: string, marks: readonly TiptapMark[]): string {
     else if (mark.type === 'strike') result = `~~${result}~~`
     else if (mark.type === 'code') result = `\`${result}\``
     else if (mark.type === 'underline') result = `<u>${result}</u>`
+    else if (mark.type === 'subscript') result = `<sub>${result}</sub>`
+    else if (mark.type === 'superscript') result = `<sup>${result}</sup>`
     else if (mark.type === 'link' && typeof mark.attrs?.href === 'string') {
       result = `[${result}](${mark.attrs.href})`
     }

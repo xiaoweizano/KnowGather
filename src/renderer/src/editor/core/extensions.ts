@@ -3,6 +3,7 @@ import Underline from '@tiptap/extension-underline'
 import Link from '@tiptap/extension-link'
 import Placeholder from '@tiptap/extension-placeholder'
 import { TextStyle } from '@tiptap/extension-text-style'
+import { FontSize } from '@tiptap/extension-text-style/font-size'
 import Color from '@tiptap/extension-color'
 import TextAlign from '@tiptap/extension-text-align'
 import { TableKit } from '@tiptap/extension-table'
@@ -15,6 +16,8 @@ import { Attachment } from '../extensions/attachment'
 import { BlockNumbers } from '../extensions/blockNumbers'
 import { FoldHeadings } from '../extensions/foldHeadings'
 import { FoldCommands } from '../extensions/foldCommands'
+import { Subscript, Superscript } from '../extensions/script'
+import { MarkdownShortcuts } from '../extensions/markdownShortcuts'
 import { translate } from '../../i18n'
 
 export interface EditorFeatureOptions {
@@ -31,7 +34,7 @@ export function createEditorExtensions(options: EditorFeatureOptions = {}) {
   const foldHeadings = options.foldHeadings ?? true
   return [
     StarterKit.configure({
-      heading: { levels: [1, 2, 3] },
+      heading: { levels: [1, 2, 3, 4, 5, 6] },
       link: false,
       underline: false,
       undoRedo: { depth: 200, newGroupDelay: 420 },
@@ -47,17 +50,21 @@ export function createEditorExtensions(options: EditorFeatureOptions = {}) {
       },
     }),
     TextStyle,
+    FontSize,
     Color,
     Highlight,
+    Subscript,
+    Superscript,
     TextAlign.configure({ types: ['heading', 'paragraph'] }),
     ShizhiImage,
     TableKit.configure({ table: { resizable: true } }),
     TaskList,
     TaskItem.configure({ nested: true }),
+    MarkdownShortcuts,
     Attachment,
     CharacterCount,
     FoldHeadings.configure({
-      levels: foldHeadings ? [1, 2, 3] : [],
+      levels: foldHeadings ? [1, 2, 3, 4, 5, 6] : [],
       initialFolds: options.initialFolds ?? [],
       onFoldsChanged: options.onFoldsChanged,
     }),

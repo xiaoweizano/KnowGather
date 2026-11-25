@@ -9,8 +9,9 @@ import type { EditorCommand } from './editorCommands'
  */
 export type ToolbarActionKey =
   | EditorCommand
-  | 'color' | 'highlight' | 'link' | 'image' | 'table' | 'attachment' | 'task'
+  | 'color' | 'highlight' | 'link' | 'image' | 'table' | 'attachment'
   | 'textStyles' | 'align' | 'list' | 'indent' | 'painter' | 'outline' | 'plus'
+  | 'math' | 'diagram' | 'callout' | 'toggle' | 'columns' | 'emoji'
 
 export interface ToolbarItem {
   key: ToolbarActionKey
@@ -47,7 +48,7 @@ export const ALIGN_ITEMS: readonly ToolbarItem[] = [
 export const LIST_ITEMS: readonly ToolbarItem[] = [
   { key: 'bulletList', labelKey: 'editor.bulletList', icon: 'list', command: 'bulletList' },
   { key: 'orderedList', labelKey: 'editor.orderedList', icon: 'orderedList', command: 'orderedList' },
-  { key: 'taskList', labelKey: 'editor.taskList', icon: 'check', command: 'taskList' },
+  { key: 'taskList', labelKey: 'editor.taskList', icon: 'checkSquare', command: 'taskList' },
 ]
 
 export const INDENT_ITEMS: readonly ToolbarItem[] = [
@@ -55,19 +56,32 @@ export const INDENT_ITEMS: readonly ToolbarItem[] = [
   { key: 'outdent', labelKey: 'editor.outdent', shortcut: 'Shift+Tab', icon: 'indentDecrease', command: 'outdent' },
 ]
 
-/** Block inserts: checklist, attachment, quote, divider — the compact left set. */
+/** Line heights offered by the toolbar; a plain block follows the settings. */
+export { LINE_HEIGHTS as LINE_HEIGHT_OPTIONS } from '../extensions/blockFormat'
+
+/** Block inserts that do not already have their own button on the bar. */
 export const INSERT_GROUP: readonly ToolbarItem[] = [
-  { key: 'task', labelKey: 'editor.insert.checklistBlock', icon: 'checkSquare', command: 'taskList' },
-  { key: 'attachment', labelKey: 'editor.attachment', icon: 'attachment' },
   { key: 'blockquote', labelKey: 'editor.blockquote', icon: 'quote', command: 'blockquote' },
   { key: 'horizontalRule', labelKey: 'editor.horizontalRule', icon: 'separator', command: 'horizontalRule' },
 ]
 
-/** Everything reachable from the "+" menu: blocks, media, then the rule. */
+/**
+ * Everything reachable from the "+" menu: media, then the rich blocks.
+ *
+ * The checklist is not here on purpose: it already has its own button on the
+ * bar, and listing it twice read as two different features.
+ */
 export const INSERT_MENU_ITEMS: readonly ToolbarItem[] = [
-  ...INSERT_GROUP,
+  { key: 'attachment', labelKey: 'editor.attachment', icon: 'attachment' },
   { key: 'table', labelKey: 'editor.table', icon: 'table' },
   { key: 'image', labelKey: 'editor.image', icon: 'image' },
+  { key: 'codeBlock', labelKey: 'editor.codeBlock', icon: 'code', command: 'codeBlock' },
+  { key: 'math', labelKey: 'editor.math', icon: 'math' },
+  { key: 'diagram', labelKey: 'editor.diagram', icon: 'diagram' },
+  { key: 'callout', labelKey: 'editor.callout', icon: 'callout' },
+  { key: 'toggle', labelKey: 'editor.toggle', icon: 'toggle' },
+  { key: 'columns', labelKey: 'editor.columns', icon: 'columns' },
+  { key: 'emoji', labelKey: 'editor.emoji', icon: 'smile' },
 ]
 
 /** Right-hand group: view switches. Media inserts live in the "+" menu. */
@@ -78,5 +92,4 @@ export const VIEW_GROUP: readonly ToolbarItem[] = [
 /** Rare commands; the only things left behind the "more" caret. */
 export const MORE_TOOLBAR_ITEMS: readonly ToolbarItem[] = [
   { key: 'clearFormatting', labelKey: 'editor.clearFormatting', shortcut: 'Ctrl+\\', icon: 'x', command: 'clearFormatting' },
-  { key: 'codeBlock', labelKey: 'editor.codeBlock', shortcut: 'Ctrl+Alt+C', icon: 'code', command: 'codeBlock' },
 ]

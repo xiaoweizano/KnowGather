@@ -1,5 +1,6 @@
 import type { Editor } from '@tiptap/core'
 import { translate } from '../../i18n'
+import { MAX_BLOCK_INDENT, normalizeBlockIndent, normalizeBlockLineHeight, isFormattableBlock } from '../extensions/blockFormat'
 
 export type EditorCommand =
   | 'paragraph' | 'heading1' | 'heading2' | 'heading3' | 'heading4' | 'heading5' | 'heading6'
@@ -42,11 +43,11 @@ export function runEditorCommand(editor: Editor, command: EditorCommand): boolea
     case 'alignRight': return editor.chain().setTextAlign('right').run()
     case 'alignJustify': return editor.chain().setTextAlign('justify').run()
     case 'indent':
-      return editor.chain().sinkListItem('listItem').run()
-        || editor.chain().sinkListItem('taskItem').run()
+      // Lists nest a level; anything else moves the block itself, so indenting
+      // a plain paragraph is not a silent no-op.
+      return sinkList(editor) || changeBlockIndent(editor, 1)
     case 'outdent':
-      return editor.chain().liftListItem('listItem').run()
-        || editor.chain().liftListItem('taskItem').run()
+      return liftList(editor) || changeBlockIndent(editor, -1)
     case 'clearFormatting': return editor.chain().unsetAllMarks().clearNodes().run()
     case 'undo': return editor.chain().undo().run()
     case 'redo': return editor.chain().redo().run()
@@ -63,6 +64,30 @@ export function normalizeLinkHref(raw: string): string {
   const href = raw.trim()
   if (!href) return ''
   return /^(https?:|mailto:|#|\/)/i.test(href) ? href : `https://${href}`
+}
+
+/**
+ * What a link should *show* when the author left the text field empty.
+ *
+ * The full `https://www.baidu.com/` makes long URLs wrap and pushes the
+ * sentence out of shape, so the label is the readable part: the host without
+ * `www.`, plus the path when there is one — `baidu.com`, `example.com/docs`.
+ * Both the bubble and the toolbar read this, so the two entry points agree.
+ */
+export function linkLabelFromHref(rawHref: string): string {
+  const href = normalizeLinkHref(rawHref)
+  if (!href) return ''
+  try {
+    const url = new URL(href)
+    // Mail addresses read better without the scheme in front of them.
+    if (url.protocol === 'mailto:') return decodeURIComponent(url.pathname)
+    const host = url.host.replace(/^www\./i, '')
+    if (!host) return href
+    const path = url.pathname === '/' ? '' : url.pathname.replace(/\/+$/, '')
+    return `${host}${path}${url.search}`
+  } catch {
+    return href
+  }
 }
 
 /**
@@ -123,7 +148,7 @@ export function applyEditorLink(editor: Editor, text: string, rawHref: string): 
 
   const linkType = editor.state.schema.marks.link
   if (!linkType) return false
-  const label = text.trim() || href
+  const label = text.trim() || linkLabelFromHref(href)
   const mark = linkType.create({ href })
   const { state } = editor
   const { from, to } = state.selection
@@ -157,6 +182,95 @@ export function setEditorFontSize(editor: Editor, size: string | null): boolean 
     ? editor.chain().setFontSize(size).run()
     : editor.chain().unsetFontSize().run()
 }
+
+/* ------------------------------------------------------- block formatting */
+
+function sinkList(editor: Editor): boolean {
+  return editor.chain().sinkListItem('listItem').run() || editor.chain().sinkListItem('taskItem').run()
+}
+
+function liftList(editor: Editor): boolean {
+  return editor.chain().liftListItem('listItem').run() || editor.chain().liftListItem('taskItem').run()
+}
+
+/** Moves the current paragraph or heading one indent step in or out. */
+export function changeBlockIndent(editor: Editor, delta: 1 | -1): boolean {
+  return applyBlockAttribute(editor, 'indent', (current) => normalizeBlockIndent(normalizeBlockIndent(current) + delta))
+}
+
+/** Sets (or clears, with `null`) the line height of every selected block. */
+export function setEditorLineHeight(editor: Editor, value: string | null): boolean {
+  const next = normalizeBlockLineHeight(value)
+  return applyBlockAttribute(editor, 'lineHeight', () => next)
+}
+
+/**
+ * Rewrites one attribute across every selected block. The transaction is
+ * hand-built because ProseMirror's node-level `updateAttributes` command only
+ * reaches the block at the caret, not a multi-block selection — and
+ * `nodesBetween` skips everything for a collapsed caret, so that case resolves
+ * the caret's own ancestor block directly.
+ */
+function applyBlockAttribute(
+  editor: Editor,
+  attribute: 'indent' | 'lineHeight',
+  resolve: (current: number | string | null) => number | string | null,
+): boolean {
+  const { state } = editor
+  const { from, to, $from } = state.selection
+  const positions = new Set<number>()
+
+  if (from === to) {
+    for (let depth = $from.depth; depth > 0; depth -= 1) {
+      if (!isFormattableBlock($from.node(depth).type.name)) continue
+      positions.add($from.before(depth))
+      break
+    }
+  } else {
+    state.doc.nodesBetween(from, to, (node, pos) => {
+      if (!isFormattableBlock(node.type.name)) return true
+      positions.add(pos)
+      return false
+    })
+  }
+  if (positions.size === 0) return false
+
+  const { tr } = state
+  let changed = false
+  for (const pos of positions) {
+    const node = state.doc.nodeAt(pos)
+    if (!node) continue
+    const value = resolve(node.attrs[attribute] as number | string | null)
+    if (value === node.attrs[attribute]) continue
+    tr.setNodeAttribute(pos, attribute, value)
+    changed = true
+  }
+  if (!changed) return false
+  editor.view.dispatch(tr.scrollIntoView())
+  return true
+}
+
+/** The block the caret sits in, for reading back its formatting. */
+function caretBlockAttributes(editor: Editor): Record<string, unknown> {
+  const { $from } = editor.state.selection
+  for (let depth = $from.depth; depth > 0; depth -= 1) {
+    const node = $from.node(depth)
+    if (isFormattableBlock(node.type.name)) return node.attrs
+  }
+  return {}
+}
+
+/** Block-level indentation of the caret, so the toolbar can show its state. */
+export function currentBlockIndent(editor: Editor): number {
+  return normalizeBlockIndent(caretBlockAttributes(editor).indent)
+}
+
+/** Line height of the caret's block, or `null` when it follows settings. */
+export function currentBlockLineHeight(editor: Editor): string | null {
+  return normalizeBlockLineHeight(caretBlockAttributes(editor).lineHeight)
+}
+
+export { MAX_BLOCK_INDENT }
 
 /** The size the selection currently carries, if any, as a CSS value. */
 export function currentEditorFontSize(editor: Editor): string | null {
@@ -253,8 +367,8 @@ export function canRunEditorCommand(editor: Editor, command: EditorCommand): boo
   switch (command) {
     case 'undo': return editor.can().undo()
     case 'redo': return editor.can().redo()
-    case 'indent': return editor.can().sinkListItem('listItem') || editor.can().sinkListItem('taskItem')
-    case 'outdent': return editor.can().liftListItem('listItem') || editor.can().liftListItem('taskItem')
+    case 'indent': return editor.can().sinkListItem('listItem') || editor.can().sinkListItem('taskItem') || currentBlockIndent(editor) < MAX_BLOCK_INDENT
+    case 'outdent': return editor.can().liftListItem('listItem') || editor.can().liftListItem('taskItem') || currentBlockIndent(editor) > 0
     default: return editor.isEditable
   }
 }

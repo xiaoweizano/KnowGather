@@ -13,33 +13,6 @@ function environmentWithoutEsbuild(mode) {
     configResolved(config) {
       isServe = config.command === 'serve'
     },
-    async resolveId(source, importer, options) {
-      if (isServe) return null
-      if (source.startsWith('\0') || source.startsWith('node:')) return null
-      const actualImporter = importer?.startsWith('\0shizhi-env:')
-        ? importer.slice('\0shizhi-env:'.length)
-        : importer
-      const resolved = await this.resolve(source, actualImporter, { ...options, skipSelf: true })
-      if (!resolved || resolved.external) return null
-      const file = resolved.id.split('?')[0]
-      if (
-        !file ||
-        file.includes('/node_modules/vite/') ||
-        file.includes('\\node_modules\\vite\\') ||
-        !/\.(?:[cm]?js|jsx|ts|tsx)$/i.test(file) ||
-        (!file.includes('/node_modules/') && !file.includes('\\node_modules\\') && !file.includes('/vendor/') && !file.includes('\\vendor\\'))
-      ) return null
-      return `\0shizhi-env:${file}`
-    },
-    async load(id) {
-      if (isServe || !id.startsWith('\0shizhi-env:')) return null
-      const file = id.slice('\0shizhi-env:'.length)
-      const code = await readFile(file, 'utf8')
-      return {
-        code: rewriteEnvironment(code, 'production'),
-        map: null,
-      }
-    },
     transform(code) {
       if (isServe) {
         if (!code.includes('process.env.NODE_ENV')) return null

@@ -89,7 +89,6 @@ overrides:
   "@tiptap/extension-list": "file:vendor/workspace/tiptap__extension-list@3.32.2"
   "@tiptap/extension-ordered-list": "file:vendor/workspace/tiptap__extension-ordered-list@3.32.2"
   "@tiptap/extension-paragraph": "file:vendor/workspace/tiptap__extension-paragraph@3.32.2"
-  "@tiptap/extension-placeholder": "file:vendor/workspace/tiptap__extension-placeholder@3.32.2"
   "@tiptap/extension-strike": "file:vendor/workspace/tiptap__extension-strike@3.32.2"
   "@tiptap/extension-table-cell": "file:vendor/workspace/tiptap__extension-table-cell@3.32.2"
   "@tiptap/extension-table-header": "file:vendor/workspace/tiptap__extension-table-header@3.32.2"

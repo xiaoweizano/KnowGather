@@ -1,7 +1,7 @@
 import type { EditorCommand } from './editorCommands'
 import { translate } from '../../i18n'
 
-export type SlashAction = 'image' | 'attachment' | 'table'
+export type SlashAction = 'image' | 'attachment' | 'table' | 'math' | 'diagram' | 'callout' | 'toggle' | 'columns'
 
 export interface SlashMenuItem {
   key: string
@@ -32,6 +32,11 @@ export const SLASH_MENU_ITEMS: readonly SlashMenuItem[] = [
   { key: 'image', labelKey: 'editor.image', descriptionKey: 'editor.slash.imageDesc', icon: 'image', keywords: ['image', 'photo', '图片', '照片'], action: 'image' },
   { key: 'attachment', labelKey: 'editor.attachment', descriptionKey: 'editor.slash.attachmentDesc', icon: 'attachment', keywords: ['file', 'attach', '附件', '文件'], action: 'attachment' },
   { key: 'horizontalRule', labelKey: 'editor.horizontalRule', descriptionKey: 'editor.slash.horizontalRuleDesc', icon: 'separator', keywords: ['divider', 'hr', '分割线'], command: 'horizontalRule' },
+  { key: 'math', labelKey: 'editor.math', descriptionKey: 'editor.slash.mathDesc', icon: 'math', keywords: ['math', 'latex', 'katex', 'formula', '公式', '数学'], action: 'math' },
+  { key: 'diagram', labelKey: 'editor.diagram', descriptionKey: 'editor.slash.diagramDesc', icon: 'diagram', keywords: ['mermaid', 'uml', 'chart', 'flow', '流程图', '图'], action: 'diagram' },
+  { key: 'callout', labelKey: 'editor.callout', descriptionKey: 'editor.slash.calloutDesc', icon: 'callout', keywords: ['callout', 'note', 'highlight', '高亮块', '提示'], action: 'callout' },
+  { key: 'toggle', labelKey: 'editor.toggle', descriptionKey: 'editor.slash.toggleDesc', icon: 'toggle', keywords: ['toggle', 'details', 'collapse', '折叠块', '折叠'], action: 'toggle' },
+  { key: 'columns', labelKey: 'editor.columns', descriptionKey: 'editor.slash.columnsDesc', icon: 'columns', keywords: ['columns', 'layout', '分栏', '卡片'], action: 'columns' },
 ]
 
 export function slashItemLabel(item: SlashMenuItem): string {

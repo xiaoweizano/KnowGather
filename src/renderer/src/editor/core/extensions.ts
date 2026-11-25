@@ -1,7 +1,13 @@
 import StarterKit from '@tiptap/starter-kit'
+import type { Editor } from '@tiptap/core'
 import Underline from '@tiptap/extension-underline'
 import Link from '@tiptap/extension-link'
-import Placeholder from '@tiptap/extension-placeholder'
+// Placeholder has to come from the same @tiptap/extensions build as the rest of
+// the editor: the standalone `@tiptap/extension-placeholder` copy resolves its
+// own `@tiptap/pm`, which bundles a second prosemirror-view. Decorations made
+// by that copy cannot be merged with ours — ProseMirror throws while diffing,
+// and every command (toolbar included) dies silently.
+import { Placeholder } from '@tiptap/extensions/placeholder'
 import { TextStyle } from '@tiptap/extension-text-style'
 import { FontSize } from '@tiptap/extension-text-style/font-size'
 import Color from '@tiptap/extension-color'
@@ -18,6 +24,9 @@ import { FoldHeadings } from '../extensions/foldHeadings'
 import { FoldCommands } from '../extensions/foldCommands'
 import { Subscript, Superscript } from '../extensions/script'
 import { MarkdownShortcuts } from '../extensions/markdownShortcuts'
+import { BlockFormat } from '../extensions/blockFormat'
+import { CalloutBlock, Column, ColumnsBlock, DiagramBlock, MathBlock, ToggleBlock } from '../extensions/richBlocks'
+import { TableKeyboard } from '../extensions/tableKeyboard'
 import { translate } from '../../i18n'
 
 export interface EditorFeatureOptions {
@@ -28,6 +37,18 @@ export interface EditorFeatureOptions {
   onFoldsChanged?: (folds: string[]) => void
   /** Block-level line numbers. */
   lineNumbers?: boolean
+}
+
+/**
+ * True when the node at `pos` sits inside a table cell, so the body
+ * placeholder stays out of grids.
+ */
+function isInsideTable(editor: Editor, pos: number): boolean {
+  const $pos = editor.state.doc.resolve(Math.max(0, pos))
+  for (let depth = $pos.depth; depth > 0; depth -= 1) {
+    if ($pos.node(depth).type.name === 'table') return true
+  }
+  return false
 }
 
 export function createEditorExtensions(options: EditorFeatureOptions = {}) {
@@ -56,8 +77,17 @@ export function createEditorExtensions(options: EditorFeatureOptions = {}) {
     Subscript,
     Superscript,
     TextAlign.configure({ types: ['heading', 'paragraph'] }),
+    BlockFormat,
+    MathBlock,
+    DiagramBlock,
+    CalloutBlock,
+    ToggleBlock,
+    ColumnsBlock,
+    Column,
     ShizhiImage,
     TableKit.configure({ table: { resizable: true } }),
+    // After TableKit, so its own keymap gets first refusal.
+    TableKeyboard,
     TaskList,
     TaskItem.configure({ nested: true }),
     MarkdownShortcuts,
@@ -71,8 +101,14 @@ export function createEditorExtensions(options: EditorFeatureOptions = {}) {
     FoldCommands,
     BlockNumbers.configure({ enabled: options.lineNumbers ?? false }),
     Placeholder.configure({
-      placeholder: ({ node }) =>
-        node.type.name === 'heading' ? translate('editor.placeholder.heading') : translate('editor.placeholder.body'),
+      // Cells get no hint: "开始记录此刻的想法…" inside a grid reads as leftover
+      // body text. An empty string still marks the node as empty for layout,
+      // it just draws nothing.
+      placeholder: ({ editor, node, pos }) => {
+        if (node.type.name === 'heading') return translate('editor.placeholder.heading')
+        if (isInsideTable(editor, pos)) return ''
+        return node.type.name === 'paragraph' ? translate('editor.placeholder.body') : ''
+      },
       showOnlyWhenEditable: true,
       includeChildren: true,
     }),

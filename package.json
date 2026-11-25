@@ -27,7 +27,6 @@
     "@tiptap/extension-color": "3.32.2",
     "@tiptap/extension-image": "3.32.2",
     "@tiptap/extension-link": "3.32.2",
-    "@tiptap/extension-placeholder": "3.32.2",
     "@tiptap/extension-table": "3.32.2",
     "@tiptap/extension-table-cell": "3.32.2",
     "@tiptap/extension-table-header": "3.32.2",
@@ -85,5 +84,9 @@
       "shortcutName": "拾知"
     }
   },
-  "author": "KnowGather"
+  "author": "KnowGather",
+  "dependencies": {
+    "katex": "0.16.22",
+    "mermaid": "11.4.1"
+  }
 }

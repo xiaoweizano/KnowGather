@@ -30,6 +30,8 @@ const linkText = ref('')
 const linkHref = ref('')
 const bubbleColorButton = ref<HTMLElement | null>(null)
 const bubbleHighlightButton = ref<HTMLElement | null>(null)
+/** True while "open link" waits for the system browser to take over. */
+const openingLink = ref(false)
 let boundEditor: Editor | null = null
 
 const selectionEmpty = computed(() => {
@@ -108,6 +110,17 @@ onBeforeUnmount(() => {
   window.removeEventListener('resize', positionBubble)
 })
 
+/**
+ * The bar owns the strip above the page: a bubble placed over it would sit
+ * behind the toolbar (the bar stacks above floating editor layers so its
+ * buttons stay clickable), so the flip boundary starts below the bar.
+ */
+function boundaryPadding(): { top: number; right: number; bottom: number; left: number } {
+  const toolbar = document.querySelector('.editor-toolbar')
+  const top = toolbar ? toolbar.getBoundingClientRect().bottom + 6 : 8
+  return { top, right: 8, bottom: 8, left: 8 }
+}
+
 async function positionBubble(): Promise<void> {
   if (!visible.value || !bubble.value) return
   // Anchor to the whole link, not to a collapsed caret inside it.
@@ -134,7 +147,7 @@ async function positionBubble(): Promise<void> {
   const { x, y, strategy } = await computePosition(virtualElement, bubble.value, {
     placement: below ? 'bottom-start' : 'top-start',
     strategy: 'fixed',
-    middleware: [offset(9), flip({ padding: 8 }), shift({ padding: 8 })],
+    middleware: [offset(9), flip({ padding: boundaryPadding() }), shift({ padding: 8 })],
   })
   bubble.value.style.position = strategy
   bubble.value.style.left = `${x}px`
@@ -186,7 +199,17 @@ function currentHref(): string {
 
 async function openActiveLink(): Promise<void> {
   const href = currentHref()
-  if (href) await getShizhiApi().app.openExternal(href)
+  if (!href || openingLink.value) return
+  // The IPC round trip plus the browser's cold start can take a second; show
+  // the press landed right away so the button is not clicked twice.
+  openingLink.value = true
+  try {
+    await getShizhiApi().app.openExternal(href)
+  } catch {
+    // A refused URL is reported by the main process; the editor stays usable.
+  } finally {
+    openingLink.value = false
+  }
 }
 
 async function copyActiveLink(): Promise<void> {
@@ -225,7 +248,7 @@ function removeActiveLink(): void {
     />
 
     <template v-else-if="linkActive">
-      <button type="button" :aria-label="t('editor.link.open')" :title="t('editor.link.open')" @mousedown.prevent @click="openActiveLink">
+      <button type="button" :aria-label="t('editor.link.open')" :title="t('editor.link.open')" :disabled="openingLink" :class="{ 'is-pending': openingLink }" @mousedown.prevent @click="openActiveLink">
         <AppIcon name="external" :size="15" />
       </button>
       <button type="button" :aria-label="t('editor.link.edit')" :title="t('editor.link.edit')" @mousedown.prevent @click="openLinkPanel">
@@ -314,6 +337,13 @@ function removeActiveLink(): void {
 .bubble-menu > button.active {
   background: var(--accent-faint);
   color: var(--accent-strong);
+}
+
+/* Waiting on the system browser: dim the button so the press visibly landed. */
+.bubble-menu > button.is-pending {
+  color: var(--accent-strong);
+  opacity: 0.55;
+  cursor: progress;
 }
 
 .bubble-divider {

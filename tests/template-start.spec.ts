@@ -21,7 +21,7 @@ describe('template start cards', () => {
   it('shows the picker only over an empty page, with no dismiss button', () => {
     const start = source(startPath)
 
-    expect(start).toContain('props.editor?.isEmpty')
+    expect(start).toContain('isPageBlank(props.editor)')
     expect(start).toContain("previous?.off('update', syncEmpty)")
     expect(start).toContain("editor?.on('update', syncEmpty)")
     expect(start).toContain('templates')

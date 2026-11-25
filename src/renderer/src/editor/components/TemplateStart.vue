@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import type { Editor } from '@tiptap/core'
 import AppIcon from '../../components/AppIcon.vue'
+import { isPageBlank } from '../core/pageState'
 import { useJournalTemplateStore } from '../../stores/journalTemplates'
 import { useI18n } from '../../i18n/useI18n'
 import {
@@ -35,14 +36,14 @@ const visibleTemplates = computed(() => firstPageTemplates(templates.value, expa
 const hasMore = computed(() => templates.value.length > visibleTemplates.value.length)
 
 // The block belongs to an empty page: it disappears as soon as there is
-// content, and returns if the page is emptied again.
+// content — typed text, an image, a table — and returns if the page is emptied
+// again. `editor.isEmpty` alone is not enough: it only tells whether the text
+// content is empty, so an inserted table left the tiles sitting under it.
 const empty = ref(true)
 
 function syncEmpty(): void {
-  empty.value = props.editor?.isEmpty ?? true
+  empty.value = isPageBlank(props.editor)
 }
-
-// The instance arrives after the editor mounts; the subscription follows it.
 watch(() => props.editor, (editor, previous) => {
   previous?.off('update', syncEmpty)
   editor?.on('update', syncEmpty)

@@ -3,15 +3,17 @@ import { nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch, watchEffe
 import { Editor } from '@tiptap/core'
 import type { TiptapDocument } from '../../../../shared/document'
 import { createEditorExtensions } from '../core/extensions'
+import { createRichBlockViews, RICH_NODE_NAMES } from '../core/richBlockNodeViews'
 import { sanitizeClipboardHtml } from '../core/clipboardSanitizer'
 import { detectSlashTrigger, type SlashMenuItem, type SlashTrigger } from '../core/overlayModel'
+import { insertRichContent, isRichSlashAction, richSlashContent } from '../core/slashInsert'
 import { runEditorCommand } from '../core/editorCommands'
 import { useUiStore } from '../../stores/ui'
 import { useI18n } from '../../i18n/useI18n'
 import BubbleMenu from './BubbleMenu.vue'
 import ImageControls from './ImageControls.vue'
 import SlashMenu from './SlashMenu.vue'
-import TableControls from './TableControls.vue'
+import TableGrowHandles from './TableGrowHandles.vue'
 import '../styles/document.css'
 
 const props = defineProps<{
@@ -44,12 +46,18 @@ onMounted(async () => {
   lastSerializedContent = JSON.stringify(props.content)
   const instance = new Editor({
     element: host.value,
-    extensions: createEditorExtensions({
-      foldHeadings: ui.foldHeadings,
-      initialFolds: readFolds(props.documentId),
-      onFoldsChanged: (folds) => writeFolds(props.documentId, folds),
-      lineNumbers: ui.showLineNumbers,
-    }),
+    extensions: [
+      // Visual node views for math / diagram / toggle blocks. The plain schema
+      // versions are dropped first: registering both would leave two extensions
+      // with the same node name, which Tiptap warns about and resolves by luck.
+      ...createEditorExtensions({
+        foldHeadings: ui.foldHeadings,
+        initialFolds: readFolds(props.documentId),
+        onFoldsChanged: (folds) => writeFolds(props.documentId, folds),
+        lineNumbers: ui.showLineNumbers,
+      }).filter((extension) => !RICH_NODE_NAMES.has(extension.name)),
+      ...createRichBlockViews(),
+    ],
     content: props.content,
     autofocus: false,
     editorProps: {
@@ -140,6 +148,8 @@ function selectSlashItem(item: SlashMenuItem): void {
     emit('requestAttachment')
   } else if (item.action === 'table') {
     emit('insertTable')
+  } else if (isRichSlashAction(item.action)) {
+    insertRichContent(currentEditor, richSlashContent(item.action))
   }
   publishContent(currentEditor)
 }
@@ -228,7 +238,7 @@ defineExpose({
   />
   <BubbleMenu v-if="editor" :editor="editor" :composing="composing" />
   <ImageControls v-if="editor" :editor="editor" />
-  <TableControls v-if="editor" :editor="editor" />
+  <TableGrowHandles v-if="editor" :editor="editor" />
 </template>
 
 <style scoped>

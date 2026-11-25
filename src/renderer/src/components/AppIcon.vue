@@ -91,6 +91,12 @@ const paths: Record<string, string[]> = {
   users: ['M9 11.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z', 'M2.8 20.2c0-3.2 2.8-5.2 6.2-5.2s6.2 2 6.2 5.2', 'M16 4.9a3.5 3.5 0 0 1 0 6.4', 'M17.5 15.4c2.2.5 3.7 2.1 3.7 4.4'],
   subscript: ['M4 6h6', 'M7 6l-3 10', 'M19 13h-5l3 4h-3v1h5', 'M17 11v6'],
   superscript: ['M4 10h6', 'M7 10l-3 10', 'M19 4h-5l3 4h-3v1h5', 'M17 2v6'],
+  math: ['M4 5h8l-6 7 6 7H4', 'M15 8h5', 'M17.5 5.5v9', 'M19.5 12.5 15 17.5', 'M15 12.5l4.5 5'],
+  diagram: ['M4 4h6v5H4z', 'M14 15h6v5h-6z', 'M7 9v4h10v2', 'M4 15h6v5H4z'],
+  callout: ['M4 5h16v11H9l-4 3.5V16H4V5Z', 'M8 9h8', 'M8 12h5'],
+  toggle: ['M4 6h7', 'M4 12h10', 'M4 18h7', 'm15 5 3 3-3 3'],
+  columns: ['M4 5h7v14H4z', 'M13 5h7v14h-7z'],
+  smile: ['M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z', 'M8.5 14.2a4.6 4.6 0 0 0 7 0', 'M9 9.6h.01', 'M15 9.6h.01'],
 }
 
 const iconPaths = computed(() => paths[props.name] ?? paths.info!)

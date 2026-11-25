@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { Editor } from '@tiptap/core'
 import { createEditorExtensions } from '../src/renderer/src/editor/core/extensions'
-import { applyFormatSnapshot, captureFormatSnapshot, isEditorCommandActive, runEditorCommand } from '../src/renderer/src/editor/core/editorCommands'
+import { applyFormatSnapshot, captureFormatSnapshot, canRunEditorCommand, isEditorCommandActive, runEditorCommand, setEditorLineHeight } from '../src/renderer/src/editor/core/editorCommands'
+import { MAX_BLOCK_INDENT, blockIndentAttributes, blockLineHeightAttributes, normalizeBlockIndent, normalizeBlockLineHeight } from '../src/renderer/src/editor/extensions/blockFormat'
 import { computeToolbarLayout, type ToolbarLayoutItem } from '../src/renderer/src/editor/core/toolbarLayout'
-import { ALIGN_ITEMS, INSERT_GROUP, LIST_ITEMS, MORE_TOOLBAR_ITEMS, TEXT_GROUP, TEXT_STYLE_MENU } from '../src/renderer/src/editor/core/toolbarConfig'
+import { ALIGN_ITEMS, INSERT_GROUP, INSERT_MENU_ITEMS, LIST_ITEMS, MORE_TOOLBAR_ITEMS, TEXT_GROUP, TEXT_STYLE_MENU } from '../src/renderer/src/editor/core/toolbarConfig'
 import { COLOR_GRID, COLOR_NEUTRALS, TEXT_GRADIENTS, contrastOn, gradientTextColor } from '../src/renderer/src/editor/core/palettes'
 
 const editors: Editor[] = []
@@ -197,10 +198,109 @@ describe('toolbar composition', () => {
       ...ALIGN_ITEMS.map((item) => item.key),
       ...LIST_ITEMS.map((item) => item.key),
     ])
-    for (const key of ['bold', 'italic', 'underline', 'strike', 'task', 'attachment', 'blockquote', 'horizontalRule', 'alignLeft', 'bulletList', 'orderedList', 'taskList']) {
+    // `taskList` is the checklist entry from the list group; the "+" menu no
+    // longer repeats it, so the bar keeps the only checklist button.
+    // Attachment and the rich blocks moved into the "+" menu as well.
+    for (const key of ['bold', 'italic', 'underline', 'strike', 'blockquote', 'horizontalRule', 'alignLeft', 'bulletList', 'orderedList', 'taskList']) {
       expect(barKeys.has(key as never), `${key} should be visible on the bar`).toBe(true)
     }
-    expect(MORE_TOOLBAR_ITEMS.map((item) => item.key)).toEqual(['clearFormatting', 'codeBlock'])
+    for (const key of ['attachment', 'table', 'image', 'codeBlock', 'emoji']) {
+      expect(INSERT_MENU_ITEMS.map((item) => item.key), `${key} should stay in the "+" menu`).toContain(key)
+    }
+    // Code block moved to the "+" menu; keeping it behind "more" as well would
+    // repeat the same command in two places.
+    expect(INSERT_MENU_ITEMS.some((item) => item.command === 'codeBlock')).toBe(true)
+    expect(MORE_TOOLBAR_ITEMS.map((item) => item.key)).toEqual(['clearFormatting'])
     expect(TEXT_STYLE_MENU.map((item) => item.key)).toEqual(['code', 'subscript', 'superscript', 'link'])
+  })
+
+  it('shows one checklist entry and a real ordered list button', () => {
+    // A duplicated checklist button on the bar (once in the list group, once in
+    // the insert group) read as two different features; the ordered list had a
+    // caret that opened a menu listing the bullet and task lists instead of just
+    // toggling the list it is named after.
+    const checklist = LIST_ITEMS.filter((item) => item.command === 'taskList')
+    expect(checklist).toHaveLength(1)
+    // The bar button is the only checklist entry: repeating it in the "+" menu
+    // made one command look like two different features.
+    expect(INSERT_MENU_ITEMS.some((item) => item.command === 'taskList')).toBe(false)
+    expect(LIST_ITEMS.find((item) => item.key === 'orderedList')?.command).toBe('orderedList')
+  })
+})
+
+describe('block indent and line height', () => {
+  it('indents a plain paragraph, not just list items', () => {
+    const editor = createEditor()
+    editor.commands.setTextSelection(2)
+    expect(runEditorCommand(editor, 'indent')).toBe(true)
+    expect(editor.getJSON().content?.[0]?.attrs?.indent).toBe(1)
+    expect(blockIndentAttributes(1)).toEqual({ 'data-indent': '1', style: 'padding-left: 1.60em;' })
+
+    expect(runEditorCommand(editor, 'outdent')).toBe(true)
+    expect(editor.getJSON().content?.[0]?.attrs?.indent).toBe(0)
+    expect(blockIndentAttributes(0)).toEqual({})
+  })
+
+  it('stops at the indentation limits', () => {
+    const editor = createEditor()
+    editor.commands.setTextSelection(2)
+    for (let step = 0; step < MAX_BLOCK_INDENT; step += 1) runEditorCommand(editor, 'indent')
+    expect(editor.getJSON().content?.[0]?.attrs?.indent).toBe(MAX_BLOCK_INDENT)
+    expect(canRunEditorCommand(editor, 'indent')).toBe(false)
+  })
+
+  it('nests list items instead of shifting the list block', () => {
+    const list = new Editor({
+      extensions: createEditorExtensions(),
+      content: {
+        type: 'doc',
+        content: [{
+          type: 'bulletList',
+          content: [
+            { type: 'listItem', content: [{ type: 'paragraph', content: [{ type: 'text', text: '一' }] }] },
+            { type: 'listItem', content: [{ type: 'paragraph', content: [{ type: 'text', text: '二' }] }] },
+          ],
+        }],
+      },
+    })
+    editors.push(list)
+    // Put the caret in the second item; only then can it sink under the first.
+    list.commands.setTextSelection(list.state.doc.content.size - 3)
+    expect(runEditorCommand(list, 'indent')).toBe(true)
+    const outer = list.getJSON().content?.[0]
+    expect(outer?.content?.[0]?.content?.[1]?.type).toBe('bulletList')
+    // The list block itself keeps its indent attribute untouched.
+    expect(outer?.attrs?.indent ?? 0).toBe(0)
+  })
+
+  it('sets line height on every block in a multi-block selection', () => {
+    const editor = new Editor({
+      extensions: createEditorExtensions(),
+      content: {
+        type: 'doc',
+        content: [
+          { type: 'paragraph', content: [{ type: 'text', text: '第一段' }] },
+          { type: 'paragraph', content: [{ type: 'text', text: '第二段' }] },
+        ],
+      },
+    })
+    editors.push(editor)
+    editor.commands.selectAll()
+    expect(setEditorLineHeight(editor, '2')).toBe(true)
+    const blocks = editor.getJSON().content ?? []
+    expect(blocks.map((node) => node.attrs?.lineHeight)).toEqual(['2', '2'])
+    expect(blockLineHeightAttributes('2')).toEqual({ 'data-line-height': '2', style: 'line-height: 2;' })
+
+    expect(setEditorLineHeight(editor, null)).toBe(true)
+    expect((editor.getJSON().content ?? []).every((node) => !node.attrs?.lineHeight)).toBe(true)
+    expect(blockLineHeightAttributes(null)).toEqual({})
+  })
+
+  it('ignores line heights outside the offered values', () => {
+    expect(normalizeBlockLineHeight('2')).toBe('2')
+    expect(normalizeBlockLineHeight('1.75')).toBeNull()
+    expect(normalizeBlockLineHeight('red; background: url(x)')).toBeNull()
+    expect(normalizeBlockIndent(-3)).toBe(0)
+    expect(normalizeBlockIndent(99)).toBe(MAX_BLOCK_INDENT)
   })
 })

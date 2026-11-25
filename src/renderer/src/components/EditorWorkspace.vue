@@ -120,6 +120,7 @@ async function pickImages(): Promise<void> {
   }
 }
 
+/** Drop-in insertion used by the editor's own slash menu and drop handler. */
 function insertImages(references: AttachmentReference[]): void {
   if (!editor.value || references.length === 0) return
   for (const reference of references) {
@@ -146,6 +147,7 @@ async function pickAttachments(): Promise<void> {
   }
 }
 
+/** Drop-in insertion used by the editor's own slash menu and drop handler. */
 function insertAttachments(references: AttachmentReference[]): void {
   if (!editor.value || references.length === 0) return
   for (const reference of references) {
@@ -155,13 +157,6 @@ function insertAttachments(references: AttachmentReference[]): void {
     }).run()
   }
   showToast(references.length === 1 ? t('document.toast.attachmentInserted') : t('document.toast.attachmentsInserted', { count: references.length }))
-}
-
-function insertTable(): void {
-  const currentEditor = editor.value
-  if (!currentEditor) return
-  currentEditor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()
-  showToast(t('document.toast.tableInserted'))
 }
 
 onBeforeUnmount(() => {
@@ -226,9 +221,6 @@ onBeforeUnmount(() => document.removeEventListener('keydown', handleWorkspaceSho
       @change="handleChange"
       @selection-change="selectionActive = $event"
       @notify="showToast"
-      @request-image="pickImages"
-      @request-attachment="pickAttachments"
-      @insert-table="insertTable"
     />
 
     <Transition name="toast">

@@ -1,5 +1,6 @@
 import type { AttachmentReference, TiptapDocument, TiptapMark, TiptapNode } from '@shared/document'
 import { translate } from '../../i18n'
+import { richBlockPreviewText, richBlockToMarkdown } from './richBlockModel'
 
 const ALIGNMENT_ROW = ['---', '---', '---']
 
@@ -21,6 +22,11 @@ export function plainTextPreview(document: TiptapDocument, limit = 400): string 
   const visit = (node: TiptapNode): void => {
     if (typeof node.text === 'string') {
       parts.push(node.text)
+      return
+    }
+    const richText = richBlockPreviewText(node)
+    if (richText !== null) {
+      parts.push(richText)
       return
     }
     if (node.type === 'image') {
@@ -64,6 +70,8 @@ export function normalizeAttachmentReference(value: unknown): AttachmentReferenc
 }
 
 function renderBlock(node: TiptapNode, depth = 0): string {
+  const rich = richBlockToMarkdown(node, (children) => renderChildren(children as TiptapNode[], depth))
+  if (rich !== null) return rich
   switch (node.type) {
     case 'paragraph':
       return `${renderInline(node.content ?? [])}\n\n`

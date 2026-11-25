@@ -567,3 +567,121 @@
   padding-left: 0;
   text-indent: 0;
 }
+
+/* ------------------------------------------------------------ rich blocks */
+/*
+ * Math, diagram, callout, toggle and column blocks. The first two are atom
+ * nodes rendered by Vue node views (see richBlockNodeView.ts); the rest are
+ * plain contenteditable containers that only need layout.
+ */
+
+.shizhi-math,
+.shizhi-diagram {
+  position: relative;
+}
+
+/* The source line under a rendered formula is the edit affordance; it is
+   hidden until the block is hovered so the page reads clean when printed. */
+.shizhi-editor .shizhi-node-view[data-node-type="mathBlock"] .math-card::after,
+.shizhi-editor .shizhi-node-view[data-node-type="diagramBlock"] .diagram-card::after {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  padding: 1px 6px;
+  border-radius: 5px;
+  background: var(--panel-strong);
+  color: var(--text-tertiary);
+  content: attr(data-hint);
+  font-size: 10px;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.shizhi-editor .shizhi-node-view:hover .math-card::after,
+.shizhi-editor .shizhi-node-view:hover .diagram-card::after {
+  opacity: 1;
+}
+
+.shizhi-node-view.ProseMirror-selectednode > * {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 11px;
+}
+
+/* --- callout ------------------------------------------------------------ */
+.shizhi-editor .shizhi-callout {
+  --callout-accent: #3176f0;
+  --callout-bg: #eef3fe;
+  margin: 1.05em 0 1.2em;
+  padding: 10px 14px 4px 14px;
+  border-left: 3px solid var(--callout-accent);
+  border-radius: 4px 9px 9px 4px;
+  background: var(--callout-bg);
+}
+
+.shizhi-editor .shizhi-callout[data-variant="success"] { --callout-accent: #1d8f56; --callout-bg: #e9f7f0; }
+.shizhi-editor .shizhi-callout[data-variant="warning"] { --callout-accent: #b78620; --callout-bg: #fff6e4; }
+.shizhi-editor .shizhi-callout[data-variant="danger"] { --callout-accent: #cf5365; --callout-bg: #fff1f2; }
+
+.shizhi-editor .shizhi-callout > p:first-child { margin-top: 0; }
+.shizhi-editor .shizhi-callout > *:last-child { margin-bottom: 0; }
+
+/* --- toggle ------------------------------------------------------------- */
+.shizhi-editor .shizhi-toggle {
+  margin: 1.05em 0 1.2em;
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  background: var(--panel-muted);
+}
+
+.shizhi-toggle-summary {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 12px;
+  border: 0;
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 620;
+  text-align: left;
+}
+
+.shizhi-toggle-summary:hover { color: var(--accent-strong); }
+.shizhi-toggle-caret { width: 12px; color: var(--text-tertiary); font-size: 11px; }
+
+.shizhi-toggle-body {
+  padding: 2px 14px 6px 31px;
+}
+
+.shizhi-toggle[data-open="false"] .shizhi-toggle-body { display: none; }
+
+/* --- columns ------------------------------------------------------------ */
+.shizhi-editor .shizhi-columns {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 16px;
+  margin: 1.05em 0 1.2em;
+}
+
+.shizhi-editor .shizhi-column {
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  background: var(--panel-muted);
+}
+
+.shizhi-editor .shizhi-column > *:first-child { margin-top: 0; }
+.shizhi-editor .shizhi-column > *:last-child { margin-bottom: 0; }
+
+@media (max-width: 720px) {
+  .shizhi-editor .shizhi-columns {
+    grid-auto-flow: row;
+    grid-auto-columns: auto;
+  }
+}

@@ -6,7 +6,9 @@ import EditorToolbar from '../editor/components/EditorToolbar.vue'
 import EditorCanvas from '../editor/components/EditorCanvas.vue'
 import OutlinePanel from '../editor/components/OutlinePanel.vue'
 import EditorStatusBar from './EditorStatusBar.vue'
+import { getShizhiApi } from '../services/api'
 import { useUiStore } from '../stores/ui'
+import { useI18n } from '../i18n/useI18n'
 import type { AttachmentReference } from '../../../shared/document'
 
 const props = withDefaults(defineProps<{
@@ -24,13 +26,12 @@ const emit = defineEmits<{
   ready: [editor: Editor | null]
   selectionChange: [hasSelection: boolean]
   notify: [message: string]
-  requestImage: []
-  requestAttachment: []
-  insertTable: []
   settingsChange: [settings: { foldHeadings: boolean; lineNumbers: boolean }]
 }>()
 
 const ui = useUiStore()
+const { t } = useI18n()
+const api = getShizhiApi()
 const canvas = ref<{ getEditor: () => Editor | null } | null>(null)
 // The editor instance must stay raw: Vue's reactive proxy breaks ProseMirror
 // transactions ("Applying a mismatched transaction"), which silently killed
@@ -61,6 +62,70 @@ function refreshOutline(): void {
   outline.value?.refresh()
 }
 
+/* ---------------------------------------------------------- insert actions */
+/*
+ * The pane owns image / attachment / table insertion itself. It used to
+ * forward them to each caller, and the journal page never listened, so those
+ * toolbar buttons and slash items silently did nothing there.
+ */
+
+function notify(message: string): void {
+  emit('notify', message)
+}
+
+async function pickImages(): Promise<void> {
+  try {
+    insertImages(await api.attachments.pickImages())
+  } catch {
+    notify(t('document.toast.imageFailed'))
+  }
+}
+
+function insertImages(references: readonly AttachmentReference[]): void {
+  const instance = editor.value
+  if (!instance || references.length === 0) return
+  for (const reference of references) {
+    instance.chain().focus().insertContent({
+      type: 'image',
+      attrs: {
+        src: reference.url,
+        alt: reference.name,
+        title: reference.name,
+        width: '100',
+        align: 'center',
+      },
+    }).run()
+  }
+  notify(references.length === 1 ? t('document.toast.imageInserted') : t('document.toast.imagesInserted', { count: references.length }))
+}
+
+async function pickAttachments(): Promise<void> {
+  try {
+    insertAttachments(await api.attachments.pickFiles())
+  } catch {
+    notify(t('document.toast.attachmentFailed'))
+  }
+}
+
+function insertAttachments(references: readonly AttachmentReference[]): void {
+  const instance = editor.value
+  if (!instance || references.length === 0) return
+  for (const reference of references) {
+    instance.chain().focus().insertContent({
+      type: 'attachment',
+      attrs: { ...reference },
+    }).run()
+  }
+  notify(references.length === 1 ? t('document.toast.attachmentInserted') : t('document.toast.attachmentsInserted', { count: references.length }))
+}
+
+function insertTable(rows = 3, cols = 3): void {
+  const instance = editor.value
+  if (!instance) return
+  instance.chain().focus().insertTable({ rows, cols, withHeaderRow: true }).run()
+  notify(t('document.toast.tableInserted'))
+}
+
 defineExpose({ getEditor, focus, refreshOutline })
 </script>
 
@@ -70,9 +135,9 @@ defineExpose({ getEditor, focus, refreshOutline })
       <EditorToolbar
         :editor="editor"
         @notify="emit('notify', $event)"
-        @request-image="emit('requestImage')"
-        @request-attachment="emit('requestAttachment')"
-        @insert-table="emit('insertTable')"
+        @request-image="pickImages"
+        @request-attachment="pickAttachments"
+        @insert-table="insertTable"
         @fold-all="editor?.commands.foldAllHeadings()"
         @unfold-all="editor?.commands.unfoldAllHeadings()"
       />
@@ -87,9 +152,9 @@ defineExpose({ getEditor, focus, refreshOutline })
         @ready="handleReady"
         @change="emit('change', $event)"
         @selection-change="emit('selectionChange', $event)"
-        @request-image="emit('requestImage')"
-        @request-attachment="emit('requestAttachment')"
-        @insert-table="emit('insertTable')"
+        @request-image="pickImages"
+        @request-attachment="pickAttachments"
+        @insert-table="insertTable"
         @notify="emit('notify', $event)"
         @settings-change="handleSettingsChange"
       />

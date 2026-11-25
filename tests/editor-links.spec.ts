@@ -5,6 +5,7 @@ import StarterKit from '@tiptap/starter-kit'
 import {
   applyEditorLink,
   getActiveLinkRange,
+  linkLabelFromHref,
   normalizeLinkHref,
 } from '../src/renderer/src/editor/core/editorCommands'
 
@@ -51,12 +52,12 @@ describe('applying the link card', () => {
     expect(editor.isActive('link')).toBe(true)
   })
 
-  it('inserts a link at a collapsed caret and falls back to the href as label', () => {
+  it('inserts a link at a collapsed caret and falls back to a readable label', () => {
     const editor = createEditor('')
     editor.commands.setTextSelection(1)
 
     expect(applyEditorLink(editor, '   ', 'www.baidu.com')).toBe(true)
-    expect(editor.state.doc.textContent).toBe('https://www.baidu.com')
+    expect(editor.state.doc.textContent).toBe('baidu.com')
     expect(editor.getAttributes('link').href).toBe('https://www.baidu.com')
   })
 
@@ -88,5 +89,29 @@ describe('applying the link card', () => {
     const editor = createEditor('拾知笔记')
     editor.commands.setTextSelection(2)
     expect(getActiveLinkRange(editor)).toBeNull()
+  })
+})
+describe('link labels', () => {
+  it('turns a bare address into a readable label', () => {
+    expect(linkLabelFromHref('www.baidu.com')).toBe('baidu.com')
+    expect(linkLabelFromHref('https://www.baidu.com/')).toBe('baidu.com')
+    expect(linkLabelFromHref('https://example.com/docs/guide/')).toBe('example.com/docs/guide')
+    expect(linkLabelFromHref('https://example.com/search?q=1')).toBe('example.com/search?q=1')
+    expect(linkLabelFromHref('mailto:hi@example.com')).toBe('hi@example.com')
+  })
+
+  it('falls back to the address when it cannot be parsed', () => {
+    expect(linkLabelFromHref('')).toBe('')
+    expect(linkLabelFromHref('#section')).toBe('#section')
+    expect(linkLabelFromHref('/docs/a')).toBe('/docs/a')
+  })
+
+  it('uses the readable label when the text field is left empty', () => {
+    const editor = createEditor('')
+    editor.commands.setTextSelection(1)
+
+    expect(applyEditorLink(editor, '   ', 'www.baidu.com')).toBe(true)
+    expect(editor.state.doc.textContent).toBe('baidu.com')
+    expect(editor.getAttributes('link').href).toBe('https://www.baidu.com')
   })
 })

@@ -50,6 +50,33 @@ const api: ShizhiApi = {
   activity: {
     list: () => ipcRenderer.invoke(IPC_CHANNELS.activityList) as ReturnType<ShizhiApi['activity']['list']>,
   },
+  ai: {
+    getConfig: () => ipcRenderer.invoke(IPC_CHANNELS.aiGetConfig) as ReturnType<ShizhiApi['ai']['getConfig']>,
+    saveConfig: (patch) => ipcRenderer.invoke(IPC_CHANNELS.aiSaveConfig, patch) as ReturnType<ShizhiApi['ai']['saveConfig']>,
+    test: () => ipcRenderer.invoke(IPC_CHANNELS.aiTest) as ReturnType<ShizhiApi['ai']['test']>,
+    chat: (request) => ipcRenderer.invoke(IPC_CHANNELS.aiChat, request) as ReturnType<ShizhiApi['ai']['chat']>,
+    cancel: (requestId) => ipcRenderer.invoke(IPC_CHANNELS.aiCancel, requestId) as Promise<void>,
+    approve: (requestId, toolUseId, decision, remember) =>
+      ipcRenderer.invoke(IPC_CHANNELS.aiApprove, requestId, toolUseId, decision, remember === true) as Promise<void>,
+    onEvent: (handler) => {
+      // The main process sends one JSON payload; re-validate it so a malformed
+      // event cannot reach the renderer as an arbitrary object.
+      const listener = (_event: Electron.IpcRendererEvent, payload: unknown): void => {
+        if (payload && typeof payload === 'object') handler(payload as Parameters<typeof handler>[0])
+      }
+      ipcRenderer.on(IPC_CHANNELS.aiEvent, listener)
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.aiEvent, listener)
+    },
+    onDocumentsChanged: (handler) => {
+      const listener = (): void => handler()
+      ipcRenderer.on(IPC_CHANNELS.aiDocumentsChanged, listener)
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.aiDocumentsChanged, listener)
+    },
+  },
+  workspace: {
+    pick: () => ipcRenderer.invoke(IPC_CHANNELS.workspacePick) as Promise<string | null>,
+    reveal: (path) => ipcRenderer.invoke(IPC_CHANNELS.workspaceReveal, path) as Promise<void>,
+  },
   window: {
     setCloseGuard: (hasUnsavedChanges) =>
       ipcRenderer.invoke(IPC_CHANNELS.windowSetCloseGuard, hasUnsavedChanges) as Promise<void>,

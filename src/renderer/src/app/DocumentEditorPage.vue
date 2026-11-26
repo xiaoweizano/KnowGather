@@ -5,6 +5,7 @@ import ResourceSidebar from '../components/ResourceSidebar.vue'
 import EditorWorkspace from '../components/EditorWorkspace.vue'
 import JournalPage from '../components/JournalPage.vue'
 import HomePage from '../components/HomePage.vue'
+import AssistantPage from '../components/AssistantPage.vue'
 import SettingsPage from '../components/SettingsPage.vue'
 import ColumnResizer from '../components/ColumnResizer.vue'
 import ImportDialog from '../components/ImportDialog.vue'
@@ -81,6 +82,7 @@ async function handleNavigation(key: NavigationKey): Promise<void> {
 const settingsStore = useSettingsStore()
 let shortcuts: ShortcutMap = readShortcuts()
 let disposeNavigate: (() => void) | null = null
+let disposeDocumentsChanged: (() => void) | null = null
 
 /**
  * Runs the user's application-level shortcut. Only fires when no dialog owns
@@ -239,6 +241,11 @@ onMounted(async () => {
   disposeNavigate = api.app.onNavigate(() => {
     activeNavigation.value = 'settings'
   })
+  // A tool run can write documents in the main process; the lists the sidebar
+  // and home page render would otherwise stay stale until a restart.
+  disposeDocumentsChanged = api.ai.onDocumentsChanged(() => {
+    void documentStore.refreshLists()
+  })
   // The tray can be shown before the settings page is ever opened, so load the
   // app-level settings once at startup to apply locale and window behaviour.
   void settingsStore.load()
@@ -257,6 +264,8 @@ onBeforeUnmount(() => {
   disposeCloseRequest = null
   disposeNavigate?.()
   disposeNavigate = null
+  disposeDocumentsChanged?.()
+  disposeDocumentsChanged = null
   void documentStore.saveNow()
   void documentStore.saveJournalNow()
   documentStore.dispose()
@@ -353,11 +362,12 @@ onBeforeUnmount(() => {
       </section>
     </template>
 
-    <section v-else-if="activePage.page === 'assistant'" class="app-loading app-unimplemented" aria-labelledby="assistant-heading">
-      <AppIcon name="sparkles" :size="25" />
-      <strong id="assistant-heading">{{ t('settings.ai') }}</strong>
-      <span>{{ t('settings.aiHint') }}</span>
-    </section>
+    <AssistantPage
+      v-else-if="activePage.page === 'assistant'"
+      class="page-pane"
+      @go-to-settings="activeNavigation = 'settings'"
+      @notify="showPageToast"
+    />
 
     <section v-else class="app-loading app-unimplemented">
       <AppIcon name="info" :size="25" />

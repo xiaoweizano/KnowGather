@@ -151,6 +151,45 @@ export const useDocumentStore = defineStore('document', () => {
   }
 
   /**
+   * Reloads the lists without touching what the user has open.
+   *
+   * Used when another process wrote to the knowledge base — an assistant tool
+   * run — where `initialize()` would be wrong: it reselects the first document
+   * and would yank the editor out from under the user mid-edit.
+   */
+  async function refreshLists(): Promise<void> {
+    try {
+      const [storedDocuments, storedCategories, storedJournals] = await Promise.all([
+        api.documents.list(),
+        api.categories.list(),
+        api.journals.list(),
+      ])
+      documents.value = sortByUpdatedAt(storedDocuments)
+      categories.value = [...storedCategories]
+      journals.value = sortByUpdatedAt(storedJournals)
+      // Keep the open records if they still exist, with their newest revision.
+      if (current.value) {
+        const fresh = documents.value.find((document) => document.id === current.value?.id)
+        if (fresh && fresh.revision <= current.value.revision) {
+          // The editor holds newer unsaved state; leave it alone.
+        } else if (fresh) {
+          current.value = fresh
+        }
+      }
+      if (currentJournal.value) {
+        const fresh = journals.value.find((journal) => journal.id === currentJournal.value?.id)
+        if (fresh && fresh.revision <= currentJournal.value.revision) {
+          // Same rule: an in-flight edit wins over the reloaded copy.
+        } else if (fresh) {
+          currentJournal.value = fresh
+        }
+      }
+    } catch {
+      // A failed refresh leaves the previous lists in place.
+    }
+  }
+
+  /**
    * Refetches the activity payload the heatmaps render. Saves are recorded by
    * the main process, so the renderer asks again after writes that change it.
    */
@@ -916,6 +955,7 @@ export const useDocumentStore = defineStore('document', () => {
     isDirty,
     wordCount,
     initialize,
+    refreshLists,
     selectDocument,
     createDocument,
     deleteDocument,

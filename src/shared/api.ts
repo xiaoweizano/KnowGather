@@ -8,6 +8,7 @@ import type {
   JournalSavePayload,
   SaveReceipt,
 } from './document.js'
+import type { AiChatEvent, AiChatRequest, AiChatResult, AiConfigPatch, AiConfigView, AiTestFailureCode } from './ai.js'
 import type {
   ActivityPayload,
   AppInfo,
@@ -96,6 +97,33 @@ export interface ShizhiApi {
   activity: {
     list(): Promise<ActivityPayload>
   }
+  ai: {
+    getConfig(): Promise<AiConfigView>
+    saveConfig(patch: AiConfigPatch): Promise<AiConfigView>
+    /** Sends a minimal turn and reports whether the endpoint, key and model work. */
+    test(): Promise<{ ok: boolean; message?: string; code?: AiTestFailureCode }>
+    /**
+     * Runs one assistant turn, including any tool calls it decides to make.
+     *
+     * Text and tool progress arrive through `onEvent` while the run proceeds,
+     * and the promise resolves with the complete result: IPC does not order the
+     * invoke reply against the stream events, so the resolved value is what the
+     * UI must end up showing.
+     */
+    chat(request: AiChatRequest): Promise<AiChatResult>
+    cancel(requestId: string): Promise<void>
+    /** Answers an `approval` event; `remember` allows this tool for the session. */
+    approve(requestId: string, toolUseId: string, decision: 'allow' | 'deny', remember?: boolean): Promise<void>
+    onEvent(handler: (event: AiChatEvent) => void): () => void
+    /** Fires when a tool wrote to the knowledge base, so views can refresh. */
+    onDocumentsChanged(handler: () => void): () => void
+  }
+  workspace: {
+    /** Opens a directory picker; resolves to the chosen absolute path or null. */
+    pick(): Promise<string | null>
+    /** Reveals a folder in the OS file manager. */
+    reveal(path: string): Promise<void>
+  }
   window: {
     setCloseGuard(hasUnsavedChanges: boolean): Promise<void>
     onCloseRequested(handler: () => void): () => void
@@ -129,6 +157,16 @@ export const IPC_CHANNELS = {
   appNavigate: 'shizhi:app:navigate',
   updateCheck: 'shizhi:update:check',
   activityList: 'shizhi:activity:list',
+  aiGetConfig: 'shizhi:ai:get-config',
+  aiSaveConfig: 'shizhi:ai:save-config',
+  aiTest: 'shizhi:ai:test',
+  aiChat: 'shizhi:ai:chat',
+  aiCancel: 'shizhi:ai:cancel',
+  aiEvent: 'shizhi:ai:event',
+  aiApprove: 'shizhi:ai:approve',
+  aiDocumentsChanged: 'shizhi:ai:documents-changed',
+  workspacePick: 'shizhi:workspace:pick',
+  workspaceReveal: 'shizhi:workspace:reveal',
   windowSetCloseGuard: 'shizhi:window:set-close-guard',
   windowCloseRequested: 'shizhi:window:close-requested',
 } as const

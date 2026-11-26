@@ -9,7 +9,6 @@ export interface NavigationTarget {
 }
 
 export function resolveNavigationTarget(key: NavigationKey): NavigationTarget {
-  if (key === 'assistant') return { page: 'assistant', implemented: false }
   return { page: key, implemented: true }
 }
 

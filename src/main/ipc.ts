@@ -13,11 +13,27 @@ import { readFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { IPC_CHANNELS, type ImportPreviewResult, type ImportRequest, type ShizhiApi } from '../shared/api.js'
 import {
+  applyAiConfigPatch,
+  buildAiTestRequest,
+  toAiConfigView,
+  validateAiChatRequest,
+  type AiChatEvent,
+  type AiChatErrorCode,
+  type AiProviderConfig,
+  type AiTestFailureCode,
+} from '../shared/ai.js'
+import { streamAiChat } from './aiClient.js'
+import { runAgent } from './agentRunner.js'
+import { ApprovalBroker } from './aiApproval.js'
+import { buildToolRegistry } from './tools/index.js'
+import { buildSystemPrompt } from '../shared/systemPrompt.js'
+import type { AiConfigStore } from './aiConfigStore.js'
+import {
   validateCategorySavePayload,
   validateDocumentSavePayload,
   validateJournalSavePayload,
 } from '../shared/validation.js'
-import { validateAppSettingsPatch, type AppInfo, type AppSettingsPatch } from '../shared/settings.js'
+import { DEFAULT_APP_SETTINGS, validateAppSettingsPatch, type AppInfo, type AppSettingsPatch } from '../shared/settings.js'
 import type { AttachmentStore } from './attachments.js'
 import type { ActivityStore } from './activityStore.js'
 import type { SettingsStore } from './settingsStore.js'
@@ -31,6 +47,7 @@ export interface IpcHandlerOptions {
   attachments?: AttachmentStore
   settings?: SettingsStore
   activity?: ActivityStore
+  ai?: AiConfigStore
   setTaskbarVisible?(visible: boolean): void
   getAppInfo?(): AppInfo
   onSettingsChanged?(payload: AppSettingsPatch): void
@@ -44,6 +61,12 @@ export function registerIpcHandlers(
   const attachments = options?.attachments
   const settings = options?.settings
   const activity = options?.activity
+  const ai = options?.ai
+  // One chat run per request id; holding the controller is what makes a
+  // "stop" from the UI able to close a stream the provider is still writing.
+  const aiRuns = new Map<string, { controller: AbortController; sender: WebContents }>()
+  const approvals = new ApprovalBroker()
+  const toolRegistry = buildToolRegistry()
 
   ipcMain.handle(IPC_CHANNELS.documentsList, () => repository.list())
   ipcMain.handle(IPC_CHANNELS.documentsGet, (_event, id) => repository.get(assertString(id)))
@@ -205,6 +228,125 @@ export function registerIpcHandlers(
     if (!activity) return { days: {}, seeded: false }
     const [documents, journals] = await Promise.all([repository.list(), repository.listJournals()])
     return activity.list([...documents, ...journals])
+  })
+
+  ipcMain.handle(IPC_CHANNELS.aiGetConfig, async () => {
+    if (!ai) throw new Error('AI configuration storage is unavailable')
+    return toAiConfigView(await ai.get())
+  })
+  ipcMain.handle(IPC_CHANNELS.aiSaveConfig, async (_event, patch) => {
+    if (!ai) throw new Error('AI configuration storage is unavailable')
+    const current = await ai.get()
+    const next = applyAiConfigPatch(current, patch)
+    return toAiConfigView(await ai.save(next))
+  })
+  ipcMain.handle(IPC_CHANNELS.aiTest, async () => {
+    if (!ai) return { ok: false, message: 'AI configuration storage is unavailable', code: 'notConfigured' as const }
+    const config: AiProviderConfig = await ai.get()
+    const request = buildAiTestRequest(`test-${Date.now()}`)
+    let reply = ''
+    let failure: string | null = null
+    let failureCode: AiChatErrorCode | undefined
+    await streamAiChat({
+      config,
+      request,
+      emit(event) {
+        if (event.type === 'delta') reply += event.text
+        if (event.type === 'error') {
+          failure = event.message
+          failureCode = event.code
+        }
+      },
+    })
+    if (failure) {
+      return failureCode === 'notConfigured'
+        ? { ok: false, code: 'notConfigured' as const }
+        : { ok: false, message: failure, code: failureCode }
+    }
+    return reply.trim() ? { ok: true } : { ok: false, code: 'emptyReply' as const }
+  })
+  ipcMain.handle(IPC_CHANNELS.aiChat, async (event, payload) => {
+    if (!ai) throw new Error('AI configuration storage is unavailable')
+    const request = validateAiChatRequest(payload)
+    if (aiRuns.has(request.requestId)) throw new TypeError('A chat request with this id is already running')
+    const config = await ai.get()
+    const appSettings = (await settings?.get()) ?? { ...DEFAULT_APP_SETTINGS }
+    const sender = event.sender
+    const controller = new AbortController()
+    aiRuns.set(request.requestId, { controller, sender })
+    const send = (chatEvent: AiChatEvent): void => {
+      if (sender.isDestroyed()) return
+      sender.send(IPC_CHANNELS.aiEvent, chatEvent)
+    }
+
+    const emit = (chatEvent: AiChatEvent): void => {
+      // The resolved value must stand on its own: the invoke reply can reach the
+      // renderer before the last `send` does, so text is also accumulated here.
+      send(chatEvent)
+    }
+
+    try {
+      return await runAgent({
+        config: {
+          ...config,
+          // The date block has to be part of the system prompt for the model to
+          // turn “本周” into concrete dates; the user's own prompt follows it.
+          systemPrompt: buildSystemPrompt({
+            now: new Date(),
+            locale: appSettings.locale,
+            workspaceRoot: appSettings.workspaceRoot,
+            platform: process.platform,
+            toolNames: [],
+            userPrompt: config.systemPrompt,
+          }),
+        },
+        requestId: request.requestId,
+        messages: request.messages,
+        registry: toolRegistry,
+        toolContext: {
+          workspaceRoot: appSettings.workspaceRoot,
+          fallbackCwd: app.getPath('userData'),
+          commandTimeoutMs: appSettings.commandTimeoutMs,
+          knowledge: repository,
+          notifyDocumentsChanged: () => {
+            if (!sender.isDestroyed()) sender.send(IPC_CHANNELS.aiDocumentsChanged)
+          },
+        },
+        permissionMode: appSettings.aiPermissionMode,
+        maxSteps: appSettings.aiMaxSteps,
+        emit,
+        approve: (approval) => approvals.wait(request.requestId, approval.toolUseId, approval.name, approval.danger),
+        signal: controller.signal,
+      })
+    } finally {
+      approvals.cancel(request.requestId)
+      aiRuns.delete(request.requestId)
+    }
+  })
+  ipcMain.handle(IPC_CHANNELS.aiApprove, (_event, requestId, toolUseId, decision, remember) => {
+    if (decision !== 'allow' && decision !== 'deny') throw new TypeError('Invalid approval decision')
+    approvals.respond(assertString(requestId), assertString(toolUseId), decision, remember === true)
+  })
+  ipcMain.handle(IPC_CHANNELS.aiCancel, (_event, requestId) => {
+    const id = assertString(requestId)
+    approvals.cancel(id)
+    aiRuns.get(id)?.controller.abort()
+  })
+  ipcMain.handle(IPC_CHANNELS.workspacePick, async (event) => {
+    const owner = ElectronBrowserWindow.fromWebContents(event.sender) ?? undefined
+    const optionsPick: Electron.OpenDialogOptions = {
+      title: tm('dialogChooseWorkspace'),
+      properties: ['openDirectory', 'createDirectory'],
+    }
+    const selection = owner
+      ? await dialog.showOpenDialog(owner, optionsPick)
+      : await dialog.showOpenDialog(optionsPick)
+    if (selection.canceled || !selection.filePaths[0]) return null
+    return selection.filePaths[0]
+  })
+  ipcMain.handle(IPC_CHANNELS.workspaceReveal, async (_event, target) => {
+    const result = await shell.openPath(assertString(target))
+    if (result) throw new Error(result)
   })
 
   ipcMain.handle(IPC_CHANNELS.windowSetCloseGuard, (_event, value) => {

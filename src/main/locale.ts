@@ -21,6 +21,7 @@ interface MainMessages {
   dialogPickFiles: string
   dialogSaveExport: string
   filterJson: string
+  dialogChooseWorkspace: string
   trayShow: string
   traySettings: string
   trayQuit: string
@@ -48,6 +49,7 @@ const zh: MainMessages = {
   dialogPickFiles: '选择附件',
   dialogSaveExport: '导出全部数据',
   filterJson: 'JSON 文件',
+  dialogChooseWorkspace: '选择工作区目录',
   trayShow: '显示主窗口',
   traySettings: '打开设置',
   trayQuit: '退出拾知',
@@ -75,6 +77,7 @@ const en: MainMessages = {
   dialogPickFiles: 'Choose files',
   dialogSaveExport: 'Export all data',
   filterJson: 'JSON file',
+  dialogChooseWorkspace: 'Choose workspace folder',
   trayShow: 'Show main window',
   traySettings: 'Open settings',
   trayQuit: 'Quit Shizhi',

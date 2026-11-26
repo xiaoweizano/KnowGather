@@ -1,5 +1,17 @@
 export type AppLocale = 'zh-CN' | 'en-US'
 
+import {
+  AI_PERMISSION_MODES,
+  DEFAULT_AI_MAX_STEPS,
+  DEFAULT_AI_PERMISSION_MODE,
+  DEFAULT_COMMAND_TIMEOUT_MS,
+  MAX_AI_MAX_STEPS,
+  MAX_COMMAND_TIMEOUT_MS,
+  MIN_AI_MAX_STEPS,
+  MIN_COMMAND_TIMEOUT_MS,
+  type AiPermissionMode,
+} from './aiTools.js'
+
 /**
  * Application-level settings that the main process must know about (tray,
  * window behaviour, auto launch, update feed). Pure UI preferences stay in the
@@ -14,6 +26,14 @@ export interface AppSettings {
   closeToTray: boolean
   autoCheckUpdates: boolean
   updateFeedUrl: string
+  /** How freely the assistant may use tools without asking. */
+  aiPermissionMode: AiPermissionMode
+  /** Directory the file and shell tools are confined to; '' disables them. */
+  workspaceRoot: string
+  /** Upper bound on model↔tool round trips in one run. */
+  aiMaxSteps: number
+  /** Default timeout for `run_command`. */
+  commandTimeoutMs: number
 }
 
 export type AppSettingsPatch = Partial<AppSettings>
@@ -27,6 +47,10 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   closeToTray: false,
   autoCheckUpdates: false,
   updateFeedUrl: '',
+  aiPermissionMode: DEFAULT_AI_PERMISSION_MODE,
+  workspaceRoot: '',
+  aiMaxSteps: DEFAULT_AI_MAX_STEPS,
+  commandTimeoutMs: DEFAULT_COMMAND_TIMEOUT_MS,
 }
 
 export interface AppInfo {
@@ -66,6 +90,7 @@ export interface UpdateCheckResult {
 }
 
 export const MAX_UPDATE_FEED_LENGTH = 2048
+export const MAX_WORKSPACE_ROOT_LENGTH = 1024
 
 export function normalizeAppSettings(input: unknown): AppSettings {
   const candidate = isRecord(input) ? input : {}
@@ -78,6 +103,12 @@ export function normalizeAppSettings(input: unknown): AppSettings {
     closeToTray: candidate.closeToTray === true,
     autoCheckUpdates: candidate.autoCheckUpdates === true,
     updateFeedUrl: normalizeFeedUrl(candidate.updateFeedUrl),
+    aiPermissionMode: AI_PERMISSION_MODES.includes(candidate.aiPermissionMode as AiPermissionMode)
+      ? candidate.aiPermissionMode as AiPermissionMode
+      : DEFAULT_AI_PERMISSION_MODE,
+    workspaceRoot: normalizeWorkspaceRoot(candidate.workspaceRoot),
+    aiMaxSteps: Math.round(clampSetting(candidate.aiMaxSteps, MIN_AI_MAX_STEPS, MAX_AI_MAX_STEPS, DEFAULT_AI_MAX_STEPS)),
+    commandTimeoutMs: Math.round(clampSetting(candidate.commandTimeoutMs, MIN_COMMAND_TIMEOUT_MS, MAX_COMMAND_TIMEOUT_MS, DEFAULT_COMMAND_TIMEOUT_MS)),
   }
 }
 
@@ -95,7 +126,36 @@ export function validateAppSettingsPatch(value: unknown): AppSettingsPatch {
     }
   }
   if ('updateFeedUrl' in value) patch.updateFeedUrl = normalizeFeedUrl(value.updateFeedUrl)
+  if ('aiPermissionMode' in value) {
+    if (!AI_PERMISSION_MODES.includes(value.aiPermissionMode as AiPermissionMode)) {
+      throw new TypeError('Invalid AI permission mode')
+    }
+    patch.aiPermissionMode = value.aiPermissionMode as AiPermissionMode
+  }
+  if ('workspaceRoot' in value) {
+    if (typeof value.workspaceRoot !== 'string') throw new TypeError('Invalid workspace root')
+    patch.workspaceRoot = normalizeWorkspaceRoot(value.workspaceRoot)
+  }
+  for (const key of ['aiMaxSteps', 'commandTimeoutMs'] as const) {
+    if (key in value) {
+      if (typeof value[key] !== 'number' || !Number.isFinite(value[key])) throw new TypeError(`Invalid ${key}`)
+      patch[key] = value[key]
+    }
+  }
   return patch
+}
+
+/** Absolute paths only; a relative one would resolve differently per launch. */
+function normalizeWorkspaceRoot(value: unknown): string {
+  if (typeof value !== 'string') return ''
+  const trimmed = value.trim().slice(0, MAX_WORKSPACE_ROOT_LENGTH)
+  if (!trimmed) return ''
+  return /^[a-zA-Z]:[\\/]/.test(trimmed) || trimmed.startsWith('/') || /^\\\\/.test(trimmed) ? trimmed : ''
+}
+
+function clampSetting(value: unknown, min: number, max: number, fallback: number): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return fallback
+  return Math.min(max, Math.max(min, value))
 }
 
 export function normalizeFeedUrl(value: unknown): string {

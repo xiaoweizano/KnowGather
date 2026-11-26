@@ -2,6 +2,18 @@ import type { ShizhiApi } from '../../../shared/api'
 import { detectDesktopPlatform } from '../../../shared/platform'
 import type { AttachmentReference, DocumentRecord, DocumentSavePayload, SaveReceipt } from '../../../shared/document'
 import {
+  buildAiChatRequest,
+  DEFAULT_AI_CONFIG,
+  type AiChatErrorCode,
+  type AiChatEvent,
+  type AiChatRequest,
+  type AiChatResult,
+  type AiConfigPatch,
+  type AiConfigView,
+  type AiProviderConfig,
+} from '../../../shared/ai'
+import { AiStreamParser } from '../../../shared/aiStream'
+import {
   DEFAULT_APP_SETTINGS,
   localDayKey,
   normalizeAppSettings,
@@ -15,6 +27,8 @@ import { BrowserDocumentRepository } from './documentRepository'
 const browserRepository = new BrowserDocumentRepository()
 const SETTINGS_KEY = 'shizhi.app-settings'
 const ACTIVITY_KEY = 'shizhi.activity'
+const AI_CONFIG_KEY = 'shizhi.ai-config'
+const AI_EVENT = 'shizhi:ai-event'
 
 const browserApi: ShizhiApi = {
   platform: detectDesktopPlatform(navigator.platform, navigator.userAgent),
@@ -90,6 +104,30 @@ const browserApi: ShizhiApi = {
   activity: {
     list: async () => readBrowserActivity(),
   },
+  ai: {
+    getConfig: async () => toBrowserAiView(readBrowserAiConfig()),
+    saveConfig: async (patch) => toBrowserAiView(writeBrowserAiConfig(patch)),
+    test: async () => ({ ok: false, code: 'desktopOnly' as const, message: 'AI requests require the desktop app' }),
+    chat: (request) => browserAiChat(request),
+    cancel: async (requestId) => {
+      browserAiControllers.get(requestId)?.abort()
+    },
+    // Browser mode has no agent loop: a tool call can never be parked here.
+    approve: async () => undefined,
+    onEvent: (handler) => {
+      const listener = (event: Event): void => {
+        const detail = (event as CustomEvent<unknown>).detail
+        if (detail && typeof detail === 'object') handler(detail as Parameters<typeof handler>[0])
+      }
+      window.addEventListener(AI_EVENT, listener)
+      return () => window.removeEventListener(AI_EVENT, listener)
+    },
+    onDocumentsChanged: () => () => undefined,
+  },
+  workspace: {
+    pick: async () => null,
+    reveal: async () => undefined,
+  },
   window: {
     setCloseGuard: async () => undefined,
     onCloseRequested: () => () => undefined,
@@ -140,6 +178,133 @@ function readBrowserActivity(): ActivityPayload {
   } catch {
     return { days: {}, seeded: false }
   }
+}
+
+/**
+ * Browser-mode AI: the same request shape as the main process, but a direct
+ * `fetch` from the page. Half of the point of the desktop app is that the key
+ * stays out of the renderer; this path exists so `pnpm dev` can preview the
+ * assistant, and it is what the settings page reports as "desktop only".
+ */
+const browserAiControllers = new Map<string, AbortController>()
+
+function readBrowserAiConfig(): AiProviderConfig {
+  try {
+    const stored = JSON.parse(localStorage.getItem(AI_CONFIG_KEY) ?? 'null') as unknown
+    return normalizeBrowserAiConfig(stored) ?? { ...DEFAULT_AI_CONFIG }
+  } catch {
+    return { ...DEFAULT_AI_CONFIG }
+  }
+}
+
+function normalizeBrowserAiConfig(value: unknown): AiProviderConfig | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const candidate = value as Partial<AiProviderConfig>
+  return {
+    protocol: candidate.protocol === 'anthropic' ? 'anthropic' : 'openai',
+    baseUrl: typeof candidate.baseUrl === 'string' ? candidate.baseUrl.trim() : '',
+    apiKey: typeof candidate.apiKey === 'string' ? candidate.apiKey : '',
+    model: typeof candidate.model === 'string' ? candidate.model.trim() : '',
+    temperature: typeof candidate.temperature === 'number' ? candidate.temperature : DEFAULT_AI_CONFIG.temperature,
+    maxTokens: typeof candidate.maxTokens === 'number' ? candidate.maxTokens : DEFAULT_AI_CONFIG.maxTokens,
+    systemPrompt: typeof candidate.systemPrompt === 'string' ? candidate.systemPrompt : '',
+  }
+}
+
+function toBrowserAiView(config: AiProviderConfig): AiConfigView {
+  return {
+    protocol: config.protocol,
+    baseUrl: config.baseUrl,
+    model: config.model,
+    temperature: config.temperature,
+    maxTokens: config.maxTokens,
+    systemPrompt: config.systemPrompt,
+    hasApiKey: config.apiKey.length > 0,
+  }
+}
+
+function writeBrowserAiConfig(patch: AiConfigPatch): AiProviderConfig {
+  const current = readBrowserAiConfig()
+  const next: AiProviderConfig = {
+    ...current,
+    ...('protocol' in patch ? { protocol: patch.protocol ?? current.protocol } : {}),
+    ...('baseUrl' in patch ? { baseUrl: patch.baseUrl ?? current.baseUrl } : {}),
+    ...('model' in patch ? { model: patch.model ?? current.model } : {}),
+    ...('temperature' in patch ? { temperature: patch.temperature ?? current.temperature } : {}),
+    ...('maxTokens' in patch ? { maxTokens: patch.maxTokens ?? current.maxTokens } : {}),
+    ...('systemPrompt' in patch ? { systemPrompt: patch.systemPrompt ?? current.systemPrompt } : {}),
+    ...('apiKey' in patch && patch.apiKey !== undefined ? { apiKey: patch.apiKey ?? '' } : {}),
+  }
+  localStorage.setItem(AI_CONFIG_KEY, JSON.stringify(next))
+  return next
+}
+
+async function browserAiChat(request: AiChatRequest): Promise<AiChatResult> {
+  const config = readBrowserAiConfig()
+  let text = ''
+  let aborted = false
+  let error: string | undefined
+  let errorCode: AiChatErrorCode | undefined
+  const emit = (payload: AiChatEvent): void => {
+    if (payload.type === 'delta') text += payload.text
+    if (payload.type === 'error') {
+      error = payload.message
+      errorCode = payload.code
+    }
+    if (payload.type === 'done' && payload.aborted) aborted = true
+    window.dispatchEvent(new CustomEvent(AI_EVENT, { detail: payload }))
+  }
+  let wire: ReturnType<typeof buildAiChatRequest>
+  try {
+    wire = buildAiChatRequest(config, request.messages)
+  } catch (cause) {
+    emit({ requestId: request.requestId, type: 'error', code: 'notConfigured', message: messageOf(cause) })
+    return { text, toolCalls: [], aborted, error: messageOf(cause), errorCode: 'notConfigured' }
+  }
+  const controller = new AbortController()
+  browserAiControllers.set(request.requestId, controller)
+  try {
+    const response = await fetch(wire.url, {
+      method: 'POST',
+      headers: wire.headers,
+      body: JSON.stringify(wire.body),
+      signal: controller.signal,
+    })
+    if (!response.ok) {
+      emit({ requestId: request.requestId, type: 'error', code: 'upstream', message: `HTTP ${response.status}` })
+      return { text, toolCalls: [], aborted, error: `HTTP ${response.status}`, errorCode: 'upstream' }
+    }
+    const parser = new AiStreamParser(config.protocol)
+    const reader = response.body?.getReader()
+    if (!reader) {
+      emit({ requestId: request.requestId, type: 'error', code: 'upstream', message: 'Empty response body' })
+      return { text, toolCalls: [], aborted, error: 'Empty response body', errorCode: 'upstream' }
+    }
+    const decoder = new TextDecoder()
+    let finished = false
+    while (!finished) {
+      const { done, value } = await reader.read()
+      const events = done ? parser.end() : parser.push(decoder.decode(value, { stream: true }))
+      for (const event of events) {
+        if (event.type === 'text') emit({ requestId: request.requestId, type: 'delta', text: event.text })
+        if (event.type === 'error') emit({ requestId: request.requestId, type: 'error', code: 'upstream', message: event.message })
+        if (event.type === 'done' || event.type === 'error') finished = true
+      }
+      if (done) break
+    }
+    emit({ requestId: request.requestId, type: 'done' })
+    reader.cancel().catch(() => undefined)
+  } catch (cause) {
+    if (controller.signal.aborted) emit({ requestId: request.requestId, type: 'done', aborted: true })
+    else emit({ requestId: request.requestId, type: 'error', code: 'network', message: messageOf(cause) })
+  } finally {
+    browserAiControllers.delete(request.requestId)
+  }
+  return { text, toolCalls: [], aborted, ...(error ? { error, errorCode } : {}) }
+}
+
+function messageOf(cause: unknown): string {
+  return cause instanceof Error ? cause.message : String(cause)
 }
 
 function downloadJson(payload: unknown): void {

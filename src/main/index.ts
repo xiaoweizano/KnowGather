@@ -4,6 +4,7 @@ import { app, BrowserWindow, ipcMain, Menu, nativeImage, protocol, shell, Tray }
 import { IPC_CHANNELS } from '../shared/api.js'
 import { localDayKey } from '../shared/settings.js'
 import { ActivityStore } from './activityStore.js'
+import { AiConfigStore } from './aiConfigStore.js'
 import { AttachmentStore } from './attachments.js'
 import { AtomicDocumentRepository } from './documentRepository.js'
 import { registerIpcHandlers } from './ipc.js'
@@ -152,6 +153,7 @@ function registerApplicationServices(): void {
   const attachments = new AttachmentStore(join(userDataPath, 'attachments'))
   settingsStore = new SettingsStore(userDataPath)
   activityStore = new ActivityStore(userDataPath)
+  const aiConfigStore = new AiConfigStore(userDataPath)
   protocol.handle('shizhi-attachment', async (request) => {
     const resolved = attachments.resolveUrl(request.url)
     if (!resolved) return new Response('Not found', { status: 404 })
@@ -171,6 +173,7 @@ function registerApplicationServices(): void {
     attachments,
     settings: settingsStore,
     activity: activityStore,
+    ai: aiConfigStore,
     setHasUnsavedChanges(value) {
       hasUnsavedChanges = value
       if (!value) {

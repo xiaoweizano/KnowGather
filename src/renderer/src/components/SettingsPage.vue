@@ -1,12 +1,23 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import AppIcon from './AppIcon.vue'
 import ShizhiMascot from './ShizhiMascot.vue'
 import { useUiStore, ACCENT_OPTIONS, CODE_FONT_OPTIONS, COMPANION_STYLES, FONT_OPTIONS, MOTION_OPTIONS, type AccentColor, type CompanionStyle, type MotionPreference, type ThemePreference } from '../stores/ui'
 import { useDocumentStore } from '../stores/document'
 import { useSettingsStore } from '../stores/settings'
+import { useAiStore } from '../stores/ai'
 import { useI18n } from '../i18n/useI18n'
 import { SUPPORTED_LOCALES } from '../i18n'
+import { AI_PROTOCOLS, type AiProtocol, type AiTestFailureCode } from '../../../shared/ai'
+import {
+  AI_PERMISSION_MODES,
+  DANGEROUS_COMMAND_PATTERNS,
+  MAX_AI_MAX_STEPS,
+  MAX_COMMAND_TIMEOUT_MS,
+  MIN_AI_MAX_STEPS,
+  MIN_COMMAND_TIMEOUT_MS,
+  type AiPermissionMode,
+} from '../../../shared/aiTools'
 import { getShizhiApi } from '../services/api'
 import {
   EDITOR_SHORTCUTS,
@@ -28,13 +39,15 @@ const documentStore = useDocumentStore()
 const settingsStore = useSettingsStore()
 const { t, locale } = useI18n()
 const api = getShizhiApi()
+const ai = useAiStore()
 
-type Section = 'general' | 'editor' | 'appearance' | 'shortcuts' | 'data' | 'about'
+type Section = 'general' | 'editor' | 'appearance' | 'assistant' | 'shortcuts' | 'data' | 'about'
 const section = ref<Section>('general')
 const sections: ReadonlyArray<{ id: Section; labelKey: string; hintKey: string; icon: string }> = [
   { id: 'general', labelKey: 'settings.nav.general', hintKey: 'settings.navHint.general', icon: 'settings' },
   { id: 'editor', labelKey: 'settings.nav.editor', hintKey: 'settings.navHint.editor', icon: 'edit' },
   { id: 'appearance', labelKey: 'settings.nav.appearance', hintKey: 'settings.navHint.appearance', icon: 'palette' },
+  { id: 'assistant', labelKey: 'settings.nav.assistant', hintKey: 'settings.navHint.assistant', icon: 'sparkles' },
   { id: 'shortcuts', labelKey: 'settings.nav.shortcuts', hintKey: 'settings.navHint.shortcuts', icon: 'keyboard' },
   { id: 'data', labelKey: 'settings.nav.data', hintKey: 'settings.navHint.data', icon: 'library' },
   { id: 'about', labelKey: 'settings.nav.about', hintKey: 'settings.navHint.about', icon: 'info' },
@@ -80,7 +93,15 @@ onMounted(async () => {
   shortcuts.value = readShortcuts()
   await settingsStore.load()
   feedDraft.value = settings.value.updateFeedUrl
+  await ai.loadConfig()
+  syncAiDraft()
 })
+
+// A conversation may have saved the config from the assistant page while this
+// page was mounted; keep the form in step with whatever the store holds.
+watch(() => ai.config, () => {
+  if (!aiDirty.value) syncAiDraft()
+}, { deep: true })
 
 function toggle(value: boolean, setter: (next: boolean) => void): void {
   setter(!value)
@@ -223,6 +244,131 @@ function setCompanionStyle(next: CompanionStyle): void {
 function platformLabel(): string {
   const platform = appInfo.value?.platform ?? api.platform
   return platform === 'darwin' ? 'macOS' : platform === 'win32' ? 'Windows' : platform
+}
+
+/* ------------------------------------------------------------------- AI */
+
+interface AiDraft {
+  protocol: AiProtocol
+  baseUrl: string
+  model: string
+  temperature: number
+  maxTokens: number
+  systemPrompt: string
+}
+
+function aiDraftFromConfig(): AiDraft {
+  return {
+    protocol: ai.config.protocol,
+    baseUrl: ai.config.baseUrl,
+    model: ai.config.model,
+    temperature: ai.config.temperature,
+    maxTokens: ai.config.maxTokens,
+    systemPrompt: ai.config.systemPrompt,
+  }
+}
+
+// The form edits a draft; nothing is written until the user presses save, so a
+// half-typed URL never becomes the active endpoint of an in-flight feature.
+const originalAiDraft = ref<AiDraft>(aiDraftFromConfig())
+const aiDraft = ref<AiDraft>({ ...originalAiDraft.value })
+const aiKeyDraft = ref('')
+const aiBusy = ref(false)
+const aiTestMessage = ref<{ ok: boolean; text: string } | null>(null)
+const aiSavedAt = ref<string | null>(null)
+
+function syncAiDraft(): void {
+  originalAiDraft.value = aiDraftFromConfig()
+  aiDraft.value = { ...originalAiDraft.value }
+  aiKeyDraft.value = ''
+  aiSavedAt.value = null
+  aiTestMessage.value = null
+}
+
+const aiDirty = computed(() =>
+  aiKeyDraft.value.length > 0
+  || aiDraft.value.protocol !== originalAiDraft.value.protocol
+  || aiDraft.value.baseUrl !== originalAiDraft.value.baseUrl
+  || aiDraft.value.model !== originalAiDraft.value.model
+  || aiDraft.value.temperature !== originalAiDraft.value.temperature
+  || aiDraft.value.maxTokens !== originalAiDraft.value.maxTokens
+  || aiDraft.value.systemPrompt !== originalAiDraft.value.systemPrompt)
+
+async function saveAi(): Promise<void> {
+  if (aiBusy.value) return
+  aiBusy.value = true
+  aiTestMessage.value = null
+  const ok = await ai.saveConfig({
+    protocol: aiDraft.value.protocol,
+    baseUrl: aiDraft.value.baseUrl.trim(),
+    model: aiDraft.value.model.trim(),
+    temperature: aiDraft.value.temperature,
+    maxTokens: aiDraft.value.maxTokens,
+    systemPrompt: aiDraft.value.systemPrompt,
+    ...(aiKeyDraft.value ? { apiKey: aiKeyDraft.value } : {}),
+  })
+  if (ok) {
+    originalAiDraft.value = { ...aiDraft.value, baseUrl: aiDraft.value.baseUrl.trim(), model: aiDraft.value.model.trim() }
+    aiKeyDraft.value = ''
+    aiSavedAt.value = new Date().toLocaleTimeString()
+    actionMessage.value = t('settings.aiSaved')
+  }
+  aiBusy.value = false
+}
+
+/** Tool-permission settings live in `AppSettings`, not the AI config. */
+async function setPermissionMode(mode: AiPermissionMode): Promise<void> {
+  if (mode === settingsStore.settings.aiPermissionMode) return
+  await settingsStore.update({ aiPermissionMode: mode })
+}
+
+async function pickWorkspace(): Promise<void> {
+  const picked = await api.workspace.pick().catch(() => null)
+  if (!picked) return
+  await settingsStore.update({ workspaceRoot: picked })
+}
+
+async function clearWorkspace(): Promise<void> {
+  await settingsStore.update({ workspaceRoot: '' })
+}
+
+async function testAi(): Promise<void> {  if (aiBusy.value) return
+  // The test runs against the stored config, so unsaved edits are saved first.
+  if (aiDirty.value) {
+    await saveAi()
+    if (aiDirty.value) return
+  }
+  aiBusy.value = true
+  try {
+    const result = await ai.testConnection()
+    aiTestMessage.value = result.ok
+      ? { ok: true, text: t('settings.aiTestOk') }
+      : { ok: false, text: testFailureText(result) }
+  } finally {
+    aiBusy.value = false
+  }
+}
+
+function clearAiKey(): void {
+  if (aiBusy.value) return
+  aiKeyDraft.value = ''
+  aiBusy.value = true
+  void ai.saveConfig({ apiKey: null }).then(() => {
+    syncAiDraft()
+    aiBusy.value = false
+  })
+}
+
+/** Codes with no provider message still need a sentence the user can act on. */
+function testFailureText(result: { message?: string; code?: AiTestFailureCode }): string {
+  switch (result.code) {
+    case 'notConfigured': return t('settings.aiTestNeedsConfig')
+    case 'desktopOnly': return t('assistant.browserOnly')
+    case 'emptyReply': return t('settings.aiTestEmpty')
+    case 'timeout': return t('settings.aiTestTimeout')
+    case 'unauthorized': return t('settings.aiTestUnauthorized')
+    default: return t('settings.aiTestFailed', { message: result.message ?? '' })
+  }
 }
 </script>
 
@@ -652,6 +798,237 @@ function platformLabel(): string {
           </div>
         </section>
 
+        <!-- ---------------------------------------------------------- assistant -->
+        <section v-if="section === 'assistant'" class="settings-panel" :aria-label="t('settings.nav.assistant')">
+
+          <div class="settings-sect">
+            <div class="sect-head"><h2>{{ t('settings.card.aiConnection') }}</h2></div>
+            <div class="sect-rows">
+              <div class="settings-row stacked">
+                <div class="settings-copy">
+                  <strong>{{ t('settings.aiProtocol') }}</strong>
+                  <small>{{ t('settings.aiProtocolHint') }}</small>
+                </div>
+                <div class="segmented">
+                  <button
+                    v-for="protocol in AI_PROTOCOLS"
+                    :key="protocol"
+                    type="button"
+                    :class="{ active: aiDraft.protocol === protocol }"
+                    @click="aiDraft.protocol = protocol"
+                  >{{ t(`settings.aiProtocol.${protocol}`) }}</button>
+                </div>
+              </div>
+
+              <div class="settings-row stacked">
+                <div class="settings-copy">
+                  <strong>{{ t('settings.aiBaseUrl') }}</strong>
+                  <small>{{ t('settings.aiBaseUrlHint') }}</small>
+                </div>
+                <input
+                  v-model="aiDraft.baseUrl"
+                  class="settings-input"
+                  type="url"
+                  spellcheck="false"
+                  :placeholder="aiDraft.protocol === 'anthropic' ? 'https://api.anthropic.com' : 'https://api.openai.com/v1'"
+                />
+              </div>
+
+              <div class="settings-row stacked">
+                <div class="settings-copy">
+                  <strong>{{ t('settings.aiApiKey') }}</strong>
+                  <small>{{ ai.config.hasApiKey ? t('settings.aiApiKeyStored') : t('settings.aiApiKeyHint') }}</small>
+                </div>
+                <div class="settings-inline">
+                  <input
+                    v-model="aiKeyDraft"
+                    class="settings-input"
+                    type="password"
+                    autocomplete="off"
+                    spellcheck="false"
+                    :placeholder="ai.config.hasApiKey ? '••••••••' : t('settings.aiApiKeyPlaceholder')"
+                    @keydown.enter.prevent="saveAi"
+                  />
+                  <button
+                    v-if="ai.config.hasApiKey"
+                    type="button"
+                    class="settings-small"
+                    :disabled="aiBusy"
+                    @click="clearAiKey"
+                  >{{ t('common.delete') }}</button>
+                </div>
+              </div>
+
+              <div class="settings-row stacked">
+                <div class="settings-copy">
+                  <strong>{{ t('settings.aiModel') }}</strong>
+                  <small>{{ t('settings.aiModelHint') }}</small>
+                </div>
+                <input
+                  v-model="aiDraft.model"
+                  class="settings-input"
+                  type="text"
+                  spellcheck="false"
+                  :placeholder="aiDraft.protocol === 'anthropic' ? 'claude-opus-5' : 'gpt-4.1'"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div class="settings-sect">
+            <div class="sect-head"><h2>{{ t('settings.card.aiBehaviour') }}</h2></div>
+            <div class="sect-rows">
+              <div class="settings-row">
+                <div class="settings-copy">
+                  <strong>{{ t('settings.aiTemperature') }}</strong>
+                  <small>
+                    {{ aiDraft.protocol === 'anthropic' ? t('settings.aiTemperatureUnsupported') : t('settings.aiTemperatureHint') }}
+                    <template v-if="aiDraft.protocol !== 'anthropic'"> · {{ aiDraft.temperature.toFixed(1) }}</template>
+                  </small>
+                </div>
+                <input
+                  class="settings-range"
+                  type="range"
+                  min="0"
+                  max="2"
+                  step="0.1"
+                  :value="aiDraft.temperature"
+                  :disabled="aiDraft.protocol === 'anthropic'"
+                  @input="aiDraft.temperature = Number(($event.target as HTMLInputElement).value)"
+                />
+              </div>
+
+              <div class="settings-row">
+                <div class="settings-copy">
+                  <strong>{{ t('settings.aiMaxTokens') }}</strong>
+                  <small>{{ t('settings.aiMaxTokensHint') }} · {{ aiDraft.maxTokens }}</small>
+                </div>
+                <input
+                  class="settings-range"
+                  type="range"
+                  min="256"
+                  max="8192"
+                  step="256"
+                  :value="aiDraft.maxTokens"
+                  @input="aiDraft.maxTokens = Number(($event.target as HTMLInputElement).value)"
+                />
+              </div>
+
+              <div class="settings-row stacked">
+                <div class="settings-copy">
+                  <strong>{{ t('settings.aiSystemPrompt') }}</strong>
+                  <small>{{ t('settings.aiSystemPromptHint') }}</small>
+                </div>
+                <textarea
+                  v-model="aiDraft.systemPrompt"
+                  class="settings-textarea"
+                  rows="3"
+                  :placeholder="t('settings.aiSystemPromptPlaceholder')"
+                />
+              </div>
+
+              <div class="settings-row stacked">
+                <div class="ai-actions">
+                  <button type="button" class="settings-small primary" :disabled="aiBusy || !aiDirty" @click="saveAi">
+                    {{ aiBusy ? t('common.loading') : t('common.save') }}
+                  </button>
+                  <button type="button" class="settings-small" :disabled="aiBusy" @click="testAi">
+                    {{ aiBusy ? t('settings.aiTesting') : t('settings.aiTest') }}
+                  </button>
+                  <span v-if="aiSavedAt" class="settings-note">{{ t('settings.aiSaved') }}</span>
+                </div>
+                <p v-if="aiTestMessage" class="settings-note" :class="aiTestMessage.ok ? 'up-to-date' : 'error'">
+                  {{ aiTestMessage.text }}
+                </p>
+                <p v-else-if="ai.error" class="settings-note error">{{ ai.error }}</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="settings-sect">
+            <div class="sect-head"><h2>{{ t('settings.card.aiTools') }}</h2></div>
+            <div class="sect-rows">
+              <div class="settings-row stacked">
+                <div class="settings-copy">
+                  <strong>{{ t('settings.aiPermissionMode') }}</strong>
+                  <small>{{ t(`aiPermission.${settingsStore.settings.aiPermissionMode}Hint`) }}</small>
+                </div>
+                <div class="segmented">
+                  <button
+                    v-for="mode in AI_PERMISSION_MODES"
+                    :key="mode"
+                    type="button"
+                    :class="{ active: settingsStore.settings.aiPermissionMode === mode }"
+                    @click="setPermissionMode(mode)"
+                  >{{ t(`aiPermission.${mode}`) }}</button>
+                </div>
+              </div>
+
+              <div class="settings-row stacked">
+                <div class="settings-copy">
+                  <strong>{{ t('settings.aiWorkspace') }}</strong>
+                  <small>{{ settingsStore.settings.workspaceRoot || t('settings.aiWorkspaceHint') }}</small>
+                </div>
+                <div class="settings-inline">
+                  <button type="button" class="settings-small" @click="pickWorkspace">
+                    {{ t('settings.aiWorkspacePick') }}
+                  </button>
+                  <button
+                    v-if="settingsStore.settings.workspaceRoot"
+                    type="button"
+                    class="settings-small"
+                    @click="clearWorkspace"
+                  >{{ t('common.delete') }}</button>
+                </div>
+              </div>
+
+              <div class="settings-row">
+                <div class="settings-copy">
+                  <strong>{{ t('settings.aiMaxSteps') }}</strong>
+                  <small>{{ t('settings.aiMaxStepsHint') }} · {{ settingsStore.settings.aiMaxSteps }}</small>
+                </div>
+                <input
+                  class="settings-range"
+                  type="range"
+                  :min="MIN_AI_MAX_STEPS"
+                  :max="MAX_AI_MAX_STEPS"
+                  step="1"
+                  :value="settingsStore.settings.aiMaxSteps"
+                  @input="updateSetting('aiMaxSteps', Number(($event.target as HTMLInputElement).value))"
+                />
+              </div>
+
+              <div class="settings-row">
+                <div class="settings-copy">
+                  <strong>{{ t('settings.aiCommandTimeout') }}</strong>
+                  <small>{{ t('settings.aiCommandTimeoutHint') }} · {{ Math.round(settingsStore.settings.commandTimeoutMs / 1000) }}s</small>
+                </div>
+                <input
+                  class="settings-range"
+                  type="range"
+                  :min="MIN_COMMAND_TIMEOUT_MS"
+                  :max="MAX_COMMAND_TIMEOUT_MS"
+                  step="5000"
+                  :value="settingsStore.settings.commandTimeoutMs"
+                  @input="updateSetting('commandTimeoutMs', Number(($event.target as HTMLInputElement).value))"
+                />
+              </div>
+
+              <div class="settings-row stacked">
+                <div class="settings-copy">
+                  <strong>{{ t('settings.aiDangerousCommands') }}</strong>
+                  <small>{{ t('settings.aiDangerousCommandsHint') }}</small>
+                </div>
+                <ul class="ai-danger-list">
+                  <li v-for="entry in DANGEROUS_COMMAND_PATTERNS" :key="entry.labelKey">
+                    {{ t(entry.labelKey) }}
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </section>
+
         <!-- ---------------------------------------------------------- shortcuts -->
         <section v-if="section === 'shortcuts'" class="settings-panel" :aria-label="t('settings.section.shortcuts')">
           <div class="settings-sect settings-sect--list">
@@ -771,9 +1148,12 @@ function platformLabel(): string {
           <div class="settings-row readonly">
             <div class="settings-copy">
               <strong>{{ t('settings.ai') }}</strong>
-              <small>{{ t('settings.aiHint') }}</small>
+              <small>{{ ai.config.model || t('settings.aiHint') }}</small>
             </div>
-            <span class="settings-value muted"><AppIcon name="info" :size="14" /> {{ t('settings.aiDisabled') }}</span>
+            <span class="settings-value" :class="{ muted: !ai.configured }">
+              <AppIcon :name="ai.configured ? 'check' : 'info'" :size="14" />
+              {{ ai.configured ? t('settings.aiTestOk') : t('settings.aiDisabled') }}
+            </span>
           </div>
             </div>
           </div>
@@ -1152,6 +1532,44 @@ function platformLabel(): string {
 .settings-range {
   width: 180px;
   accent-color: var(--accent);
+}
+
+.settings-textarea {
+  min-height: 62px;
+  padding: 8px 9px;
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  background: var(--panel-muted);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 11px;
+  line-height: 1.6;
+  resize: vertical;
+}
+
+.ai-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.ai-danger-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ai-danger-list li {
+  padding: 2px 8px;
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  background: var(--panel-muted);
+  color: var(--text-tertiary);
+  font-size: 10px;
 }
 
 .settings-note {

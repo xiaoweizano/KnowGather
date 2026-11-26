@@ -60,6 +60,10 @@
       "out/main/**/*",
       "out/preload/**/*",
       "out/renderer/**/*",
+      "build/icon.png",
+      "build/icon.ico",
+      "build/tray-16.png",
+      "build/tray-32.png",
       "package.json"
     ],
     "asar": true,
@@ -73,7 +77,8 @@
         }
       ],
       "artifactName": "KnowGather-Setup-${version}.${ext}",
-      "signExecutable": false
+      "signExecutable": false,
+      "icon": "build/icon.ico"
     },
     "nsis": {
       "oneClick": false,
@@ -81,8 +86,14 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "拾知"
-    }
+      "shortcutName": "拾知",
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "installerHeaderIcon": "build/icon.ico"
+    },
+    "asarUnpack": [
+      "build/*"
+    ]
   },
   "author": "KnowGather",
   "dependencies": {

@@ -1,3 +1,4 @@
+import { existsSync, readFileSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { app, BrowserWindow, ipcMain, Menu, nativeImage, protocol, shell, Tray } from 'electron'
@@ -43,7 +44,11 @@ async function createWindow(): Promise<void> {
   if (settings?.locale) setMainLocale(settings.locale)
 
   const appRoot = app.getAppPath()
-  mainWindow = new BrowserWindow(createWindowOptions({ platform: process.platform, appRoot }))
+  mainWindow = new BrowserWindow(createWindowOptions({
+    platform: process.platform,
+    appRoot,
+    iconPath: iconAsset('icon.ico'),
+  }))
 
   mainWindow.on('closed', () => {
     mainWindow = null
@@ -121,11 +126,92 @@ function rebuildTrayMenu(): void {
 }
 
 /**
- * A generated 16px/32px icon avoids shipping a binary asset and keeps the
- * packaging config unchanged. Drawn as a small filled rounded square in the
- * brand colour so the tray entry is recognisable on both themes.
+ * Absolute path of a bundled icon asset, or undefined when it is missing.
+ *
+ * Icons ship outside the asar archive (`build.asarUnpack`), because
+ * `nativeImage` and `BrowserWindow.icon` cannot read an `.ico` from inside it.
+ * The packed app path therefore has to be rewritten to the unpacked directory;
+ * a source checkout already has the plain path and resolves first.
+ */
+function iconAsset(name: 'icon.png' | 'icon.ico' | 'tray-16.png' | 'tray-32.png'): string | undefined {
+  const appRoot = app.getAppPath()
+  const unpacked = appRoot.replace(/app\.asar$/, 'app.asar.unpacked')
+  for (const candidate of [join(unpacked, 'build', name), join(appRoot, 'build', name)]) {
+    try {
+      if (existsSync(candidate)) return candidate
+    } catch {
+      // Try the next location: the icon is cosmetic.
+    }
+  }
+  return undefined
+}
+
+/**
+ * The tray icon.
+ *
+ * Three sources, best first:
+ *
+ * 1. `tray-16.png` — the vector silhouette, drawn for exactly this size. The
+ *    full artwork has four cards and an orbit that survive down to 32px but
+ *    read as a smear at 16.
+ * 2. A frame parsed out of `icon.ico`. `nativeImage.createFromPath` cannot
+ *    decode an `.ico` that was packed into `app.asar`, which is why the tray
+ *    fell back to the drawn square before the icons shipped unpacked.
+ * 3. A generated square, for a checkout with no built icons.
  */
 function createTrayIcon(): Electron.NativeImage {
+  const trayPath = iconAsset('tray-16.png')
+  if (trayPath) {
+    const image = nativeImage.createFromPath(trayPath)
+    if (!image.isEmpty()) return image
+  }
+  const icoPath = iconAsset('icon.ico')
+  if (icoPath) {
+    try {
+      const frame = trayFrame(icoPath)
+      if (frame) {
+        const image = nativeImage.createFromBuffer(frame)
+        if (!image.isEmpty()) return image
+      }
+    } catch {
+      // Fall through to the drawn placeholder.
+    }
+  }
+  return fallbackTrayIcon()
+}
+
+/**
+ * Picks the frame best suited to a 16–32px tray out of a PNG-compressed .ico.
+ *
+ * Preferred over `createFromPath` because the 256px frame it returns has to be
+ * downscaled by the shell, and the intermediate 48px frame is mostly ring.
+ * @returns the PNG payload, or null when the file holds no usable frame.
+ */
+function trayFrame(icoPath: string): Buffer | null {
+  const ico = readFileSync(icoPath)
+  if (ico.length < 6 || ico.readUInt16LE(2) !== 1) return null
+  const count = ico.readUInt16LE(4)
+  const frames: Buffer[] = []
+  for (let index = 0; index < count; index += 1) {
+    const at = 6 + index * 16
+    if (at + 16 > ico.length) break
+    const size = ico.readUInt32LE(at + 8)
+    const offset = ico.readUInt32LE(at + 12)
+    if (offset + size > ico.length || size < 8) continue
+    const payload = ico.subarray(offset, offset + size)
+    // PNG signature: a BMP-stored frame would start with a BITMAPINFOHEADER.
+    if (payload[0] === 0x89 && payload[1] === 0x50 && payload[2] === 0x4e && payload[3] === 0x47) {
+      frames.push(payload)
+    }
+  }
+  return frames.find((frame) => frame.readUInt32BE(16) === 32)
+    ?? frames.find((frame) => frame.readUInt32BE(16) >= 24)
+    ?? frames[0]
+    ?? null
+}
+
+/** Drawn placeholder for a checkout without a built icon. */
+function fallbackTrayIcon(): Electron.NativeImage {
   const size = 16
   const buffer = Buffer.alloc(size * size * 4)
   for (let y = 0; y < size; y += 1) {
@@ -138,8 +224,7 @@ function createTrayIcon(): Electron.NativeImage {
       buffer[index + 3] = inside ? 255 : 0
     }
   }
-  const image = nativeImage.createFromBuffer(buffer, { width: size, height: size })
-  return image.resize({ width: 16, height: 16 })
+  return nativeImage.createFromBuffer(buffer, { width: size, height: size })
 }
 
 function registerApplicationServices(): void {

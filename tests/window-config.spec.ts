@@ -27,4 +27,15 @@ describe('createWindowOptions', () => {
       sandbox: true,
     })
   })
+
+  it('uses the packaged icon on Windows and skips it on macOS', () => {
+    const iconPath = 'C:/app/build/icon.ico'
+    expect(createWindowOptions({ platform: 'win32', appRoot: 'C:/app', iconPath }).icon).toBe(iconPath)
+    // macOS takes the window icon from the bundle; passing one has no effect.
+    expect(createWindowOptions({ platform: 'darwin', appRoot: '/app', iconPath }).icon).toBeUndefined()
+  })
+
+  it('leaves the icon unset when no asset was found', () => {
+    expect(createWindowOptions({ platform: 'win32', appRoot: 'C:/app' }).icon).toBeUndefined()
+  })
 })

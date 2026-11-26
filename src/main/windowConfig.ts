@@ -7,6 +7,18 @@ export interface WindowConfigInput {
   iconPath?: string
 }
 
+/**
+ * Electron adds a default File/Edit/View/Window menu on Windows and Linux. The
+ * app draws its own chrome and every command already lives in the UI, so the
+ * bar is dead weight — and on Windows it eats a strip of the window.
+ *
+ * macOS keeps its menu: the system menu bar carries Cmd+C/V/Q. A dev server
+ * keeps it too, because that menu is where Alt/Ctrl+Shift+I and Ctrl+R live.
+ */
+export function shouldDropApplicationMenu(platform: string, devServerUrl?: string): boolean {
+  return platform !== 'darwin' && !devServerUrl
+}
+
 export function createWindowOptions({ platform, appRoot, iconPath }: WindowConfigInput) {
   const mac = platform === 'darwin'
   return {

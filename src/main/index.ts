@@ -11,7 +11,7 @@ import { AtomicDocumentRepository } from './documentRepository.js'
 import { registerIpcHandlers } from './ipc.js'
 import { setMainLocale, tm } from './locale.js'
 import { SettingsStore } from './settingsStore.js'
-import { createWindowOptions } from './windowConfig.js'
+import { createWindowOptions, shouldDropApplicationMenu } from './windowConfig.js'
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -49,6 +49,10 @@ async function createWindow(): Promise<void> {
     appRoot,
     iconPath: iconAsset('icon.ico'),
   }))
+  if (shouldDropApplicationMenu(process.platform, process.env.VITE_DEV_SERVER_URL)) {
+    mainWindow.setMenuBarVisibility(false)
+    mainWindow.removeMenu()
+  }
 
   mainWindow.on('closed', () => {
     mainWindow = null

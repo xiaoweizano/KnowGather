@@ -88,10 +88,21 @@ describe('document editor page shell', () => {
     const rail = source(navigationPath)
     const sidebar = source(sidebarPath)
 
-    expect(rail).toContain('countJournalsForLocalDate')
+    expect(rail).toContain('journalsForLocalDate')
+    expect(rail).toContain('journalStreak')
     expect(rail).not.toContain('<strong>+1</strong>')
+    expect(rail).not.toContain('nav.keepGoing')
     expect(sidebar).toContain('shouldFocusKnowledgeSearch')
     expect(sidebar).toContain('shouldFocusKnowledgeSearch(event)')
+  })
+
+  it('opens today\'s entry from the rail card instead of leaving it inert', () => {
+    const rail = source(navigationPath)
+    const page = source(pagePath)
+
+    expect(rail).toContain('openToday: []')
+    expect(rail).toContain("@click=\"emit('openToday')\"")
+    expect(page).toContain('@open-today="handleOpenJournalDay(todayDayKey())"')
   })
 
   it('keeps the library to documents and promotes journals from the journal page', () => {

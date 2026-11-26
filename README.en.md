@@ -61,7 +61,8 @@ The name says what it does: scattered daily notes are meant to **gather** in one
 
 **Other**
 - Activity heatmap on the home page (edits per day, past year)
-- Companion mascot (fifteen to choose from, or upload your own image)
+- Today-at-a-glance card in the navigation rail (characters, entries and streak, one click to today's journal)
+- Companion mascot (fifteen to choose from, or upload your own image; shown on the home page)
 - Five accent colours, light/dark themes, focus mode, custom fonts
 - Every application shortcut can be rebound
 - Imports `.txt` `.text` `.log` `.md` `.markdown` `.mdown` `.docx`, from files, folders or `.zip` archives

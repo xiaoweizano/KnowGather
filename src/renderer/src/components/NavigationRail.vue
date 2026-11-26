@@ -1,22 +1,32 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import AppIcon from './AppIcon.vue'
-import ShizhiMascot from './ShizhiMascot.vue'
 import { useUiStore } from '../stores/ui'
-import { useDocumentStore } from '../stores/document'
+import { countDocumentCharacters, useDocumentStore } from '../stores/document'
 import { getShizhiApi } from '../services/api'
 import { showTrafficLights } from '../../../shared/platform'
-import { countJournalsForLocalDate, type NavigationKey } from '../app/knowledgeNavigation'
+import { journalStreak, journalsForLocalDate, type NavigationKey } from '../app/knowledgeNavigation'
 import { useI18n } from '../i18n/useI18n'
 
 defineProps<{ activeItem: NavigationKey }>()
-const emit = defineEmits<{ navigate: [key: NavigationKey] }>()
+const emit = defineEmits<{ navigate: [key: NavigationKey]; openToday: [] }>()
 
 const ui = useUiStore()
 const documentStore = useDocumentStore()
 const { t } = useI18n()
 const platform = getShizhiApi().platform
-const todayJournalCount = computed(() => countJournalsForLocalDate(documentStore.journals))
+
+const todayJournals = computed(() => journalsForLocalDate(documentStore.journals))
+const todayEntryCount = computed(() => todayJournals.value.length)
+const todayCharacterCount = computed(() =>
+  todayJournals.value.reduce((total, journal) => total + countDocumentCharacters(journal.content), 0))
+const streak = computed(() => journalStreak(documentStore.journals))
+// `time.monthDay` is date-only; it stays correct across midnight only once
+// something else re-renders, which is the same trade-off the old card made.
+const todayLabel = computed(() => {
+  const now = new Date()
+  return t('time.monthDay', { month: now.getMonth() + 1, day: now.getDate() })
+})
 
 // Width lives on the component instead of a global ancestor selector: scoped
 // styles and ancestor overrides end up with equal specificity, so the width was
@@ -83,15 +93,32 @@ const COLLAPSED_RAIL_WIDTH = 70
 
     <div class="rail-spacer" />
 
-    <section v-if="ui.companionVisible" class="companion-card" :aria-label="t('nav.todayRecordedAria')">
-      <ShizhiMascot :variant="ui.companionStyle" :src="ui.customCompanionUrl" />
-      <div v-if="!ui.navigationCollapsed" class="companion-copy">
-        <span class="companion-heart">♥</span>
-        <span>{{ t('nav.todayRecorded') }}</span>
-        <strong>+{{ todayJournalCount }}</strong>
-        <small>{{ t('nav.keepGoing') }}</small>
+    <section v-if="!ui.navigationCollapsed" class="today-card" :aria-label="t('nav.todaySummaryAria')">
+      <span class="today-date">{{ todayLabel }}</span>
+      <div class="today-stats">
+        <span><strong>{{ todayCharacterCount }}</strong>{{ t('nav.todayChars') }}</span>
+        <span><strong>{{ todayEntryCount }}</strong>{{ t('nav.todayEntries') }}</span>
       </div>
+      <span v-if="streak > 0" class="today-streak">
+        <AppIcon name="flame" :size="12" /> {{ t('nav.todayStreak', { count: streak }) }}
+      </span>
+      <span v-else class="today-streak muted">{{ t('nav.todayNoStreak') }}</span>
+      <button type="button" class="today-open" @click="emit('openToday')">{{ t('nav.todayOpen') }}</button>
     </section>
+
+    <!-- Collapsed rail has no room for the numbers; the flame keeps the streak
+         visible and the click still opens today's entry. -->
+    <button
+      v-else
+      type="button"
+      class="today-compact"
+      :title="t('nav.todaySummaryTitle', { date: todayLabel, chars: todayCharacterCount, count: todayEntryCount })"
+      :aria-label="t('nav.todaySummaryAria')"
+      @click="emit('openToday')"
+    >
+      <AppIcon name="flame" :size="17" />
+      <span v-if="streak > 0">{{ streak }}</span>
+    </button>
 
     <button
       class="rail-collapse"
@@ -253,46 +280,100 @@ const COLLAPSED_RAIL_WIDTH = 70
   flex: 1;
 }
 
-.companion-card {
-  position: relative;
-  margin: 0 0 14px;
-  padding: 22px 7px 10px;
-  border-radius: 14px;
-  background: linear-gradient(180deg, rgba(246, 242, 255, 0.2), rgba(243, 239, 255, 0.9));
-}
-
-.companion-card :deep(.shizhi-mascot) {
-  width: 92px;
-  margin: -21px auto 9px;
-}
-
-.companion-copy {
-  position: relative;
+.today-card {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  gap: 6px;
+  margin: 0 0 14px;
+  padding: 11px 12px 9px;
+  border: 1px solid var(--border-soft);
+  border-radius: 12px;
+  background: var(--panel-muted);
+}
+
+.today-date {
+  color: var(--text-tertiary);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.today-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 10px;
   color: var(--text-secondary);
   font-size: 10px;
 }
 
-.companion-copy strong {
-  margin: 2px 0 1px;
+.today-stats span {
+  display: flex;
+  align-items: baseline;
+  gap: 3px;
+  white-space: nowrap;
+}
+
+.today-stats strong {
+  color: var(--text-primary);
+  font-size: 16px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.today-streak {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   color: var(--accent-strong);
-  font-size: 19px;
+  font-size: 10px;
+  font-weight: 600;
 }
 
-.companion-copy small {
+.today-streak.muted {
   color: var(--text-tertiary);
-  font-size: 9px;
+  font-weight: 400;
 }
 
-.companion-heart {
-  position: absolute;
-  top: -53px;
-  left: 1px;
-  color: #ef75a0;
-  font-size: 14px;
-  transform: rotate(-12deg);
+.today-open {
+  width: 100%;
+  margin-top: 2px;
+  padding: 5px 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 8px;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  transition: background 160ms ease;
+}
+
+.today-open:hover {
+  background: var(--accent-soft-border);
+}
+
+.today-compact {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  margin: 0 0 14px;
+  padding: 9px 0;
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  background: var(--panel-muted);
+  color: var(--accent-strong);
+  font-size: 11px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.today-compact:hover {
+  background: var(--accent-soft);
 }
 
 .rail-collapse {
@@ -322,14 +403,5 @@ const COLLAPSED_RAIL_WIDTH = 70
 .navigation-rail.collapsed .navigation-item {
   justify-content: center;
   padding: 0;
-}
-
-.navigation-rail.collapsed .companion-card {
-  padding: 7px;
-}
-
-.navigation-rail.collapsed .companion-card :deep(.shizhi-mascot) {
-  width: 46px;
-  margin: 0 auto;
 }
 </style>

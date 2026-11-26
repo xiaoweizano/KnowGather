@@ -24,14 +24,36 @@ export function todayDayKey(now = new Date()): string {
   return localDateKey(now)
 }
 
-export function countJournalsForLocalDate(journals: readonly JournalRecord[], now = new Date()): number {
+/** Entries written on the local calendar day that contains `now`. */
+export function journalsForLocalDate(journals: readonly JournalRecord[], now = new Date()): JournalRecord[] {
   const target = localDateKey(now)
   // Entries belong to the day they were written (`createdAt`), not the day they
   // were last edited, so editing yesterday's entry still counts as yesterday.
-  return journals.reduce((count, journal) => {
+  return journals.filter((journal) => {
     const date = new Date(journal.createdAt)
-    return Number.isNaN(date.getTime()) || localDateKey(date) !== target ? count : count + 1
-  }, 0)
+    return !Number.isNaN(date.getTime()) && localDateKey(date) === target
+  })
+}
+
+export function countJournalsForLocalDate(journals: readonly JournalRecord[], now = new Date()): number {
+  return journalsForLocalDate(journals, now).length
+}
+
+/**
+ * Consecutive days with at least one entry, counted back from today. An empty
+ * today does not break a streak that is still alive through yesterday, because
+ * the day is not over yet.
+ */
+export function journalStreak(journals: readonly JournalRecord[], now = new Date()): number {
+  const days = journalDaysSet(journals)
+  const cursor = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  if (!days[localDateKey(cursor)]) cursor.setDate(cursor.getDate() - 1)
+  let streak = 0
+  while (days[localDateKey(cursor)]) {
+    streak += 1
+    cursor.setDate(cursor.getDate() - 1)
+  }
+  return streak
 }
 
 /** Map of local days that already have a journal entry, for heatmap labels. */

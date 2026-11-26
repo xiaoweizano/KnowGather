@@ -277,6 +277,7 @@ onBeforeUnmount(() => {
     <NavigationRail
       :active-item="activeNavigation"
       @navigate="handleNavigation"
+      @open-today="handleOpenJournalDay(todayDayKey())"
     />
     <ColumnResizer
       v-if="!ui.focusMode && !ui.navigationCollapsed"

@@ -78,7 +78,6 @@ const COLLAPSED_RAIL_WIDTH = 70
       >
         <span class="navigation-icon"><AppIcon :name="item.icon" :size="19" /></span>
         <span v-if="!ui.navigationCollapsed" class="navigation-label">{{ t(item.labelKey) }}</span>
-        <span v-if="item.id === 'assistant' && !ui.navigationCollapsed" class="new-badge">{{ t('nav.newBadge') }}</span>
       </button>
     </nav>
 
@@ -250,17 +249,6 @@ const COLLAPSED_RAIL_WIDTH = 70
   white-space: nowrap;
 }
 
-.new-badge {
-  margin-left: auto;
-  padding: 2px 4px;
-  border-radius: 4px;
-  background: #7c69e8;
-  color: white;
-  font-size: 7px;
-  font-weight: 800;
-  letter-spacing: 0.06em;
-}
-
 .rail-spacer {
   flex: 1;
 }
@@ -327,8 +315,7 @@ const COLLAPSED_RAIL_WIDTH = 70
  * used to lose against the component's own default width.
  */
 .navigation-rail.collapsed .brand-copy,
-.navigation-rail.collapsed .navigation-label,
-.navigation-rail.collapsed .new-badge {
+.navigation-rail.collapsed .navigation-label {
   display: none;
 }
 

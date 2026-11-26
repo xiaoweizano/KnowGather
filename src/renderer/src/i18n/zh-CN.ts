@@ -53,7 +53,6 @@ const zhCN: Messages = {
   'nav.journal': '日志',
   'nav.assistant': 'AI 助手',
   'nav.settings': '设置',
-  'nav.newBadge': 'NEW',
   'nav.brandHome': '拾知首页',
   'nav.todayRecorded': '今日已记录',
   'nav.keepGoing': '继续加油哦～',

@@ -53,7 +53,6 @@ const enUS: Messages = {
   'nav.journal': 'Journal',
   'nav.assistant': 'AI Assistant',
   'nav.settings': 'Settings',
-  'nav.newBadge': 'NEW',
   'nav.brandHome': 'Shizhi home',
   'nav.todayRecorded': 'Recorded today',
   'nav.keepGoing': 'Keep it up!',

@@ -8,10 +8,27 @@ export type ThemePreference = ResolvedTheme | 'system'
 export type ContentWidth = 'comfortable' | 'wide'
 export type AccentColor = 'violet' | 'mint' | 'cream' | 'sakura' | 'ocean'
 export type MotionPreference = 'full' | 'reduced' | 'off'
-export type CompanionStyle = 'cat' | 'dog' | 'rabbit' | 'panda' | 'custom'
+
+/**
+ * Companion images shipped with the app.
+ *
+ * These replaced the hand-drawn SVG mascots: the artwork is a set of fifteen
+ * illustrated animals, and rendering them from PNG keeps one source of truth
+ * for the look instead of a second, cruder drawing in code.
+ */
+export type CompanionStyle =
+  | 'cat' | 'dog' | 'penguin' | 'rabbit' | 'fox'
+  | 'panda' | 'dragon' | 'bear' | 'hamster' | 'hedgehog'
+  | 'sheep' | 'chick' | 'seal' | 'dino' | 'robot'
+  | 'custom'
 
 export const ACCENT_OPTIONS: ReadonlyArray<AccentColor> = ['violet', 'mint', 'cream', 'sakura', 'ocean']
-export const COMPANION_STYLES: ReadonlyArray<Exclude<CompanionStyle, 'custom'>> = ['cat', 'dog', 'rabbit', 'panda']
+/** Order matches the picker grid: roughly smallest to most exotic. */
+export const COMPANION_STYLES: ReadonlyArray<Exclude<CompanionStyle, 'custom'>> = [
+  'cat', 'dog', 'rabbit', 'hamster', 'hedgehog',
+  'fox', 'panda', 'bear', 'sheep', 'penguin',
+  'chick', 'seal', 'dino', 'dragon', 'robot',
+]
 export const MOTION_OPTIONS: ReadonlyArray<MotionPreference> = ['full', 'reduced', 'off']
 
 /** Font choices are a fixed list so the CSS variables stay predictable. */

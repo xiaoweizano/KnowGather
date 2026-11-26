@@ -30,3 +30,9 @@ audit-*.txt
 # IDE / local AI tracking artifacts
 .idea/
 .ai-code-tracking.json
+
+# Reference material that stays on the author's machine: design specs, audit
+# notes and the source images the app assets were cut from. The shipped copies
+# live under build/ and src/renderer/src/assets/, so nothing here is needed to
+# build the app.
+docs/

@@ -773,11 +773,11 @@ function testFailureText(result: { message?: string; code?: AiTestFailureCode })
                     type="button"
                     class="companion-option"
                     :class="{ active: ui.companionStyle === style }"
-                    :title="t(`settings.companion.style.${style}`)"
+                    :title="t(`mascot.${style}Name`)"
                     @click="setCompanionStyle(style)"
                   >
                     <ShizhiMascot :variant="style" compact />
-                    <span>{{ t(`settings.companion.style.${style}`) }}</span>
+                    <span>{{ t(`mascot.${style}Name`) }}</span>
                   </button>
                   <button
                     type="button"

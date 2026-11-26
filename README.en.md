@@ -61,7 +61,7 @@ The name says what it does: scattered daily notes are meant to **gather** in one
 
 **Other**
 - Activity heatmap on the home page (edits per day, past year)
-- Companion mascot (cat / dog / rabbit / panda, or upload your own)
+- Companion mascot (fifteen to choose from, or upload your own image)
 - Five accent colours, light/dark themes, focus mode, custom fonts
 - Every application shortcut can be rebound
 - Imports `.txt` `.text` `.log` `.md` `.markdown` `.mdown` `.docx`, from files, folders or `.zip` archives
@@ -127,7 +127,7 @@ Writes go through a temporary file and an atomic rename, so a crash never leaves
 
 ## Credits
 
-The mascot in the app icon comes from the project's own design. Editing, math and diagrams build on Tiptap / ProseMirror, KaTeX and Mermaid and their communities; each remains under its own licence.
+The app icon and the companion mascots come from the project's own design. Editing, math and diagrams build on Tiptap / ProseMirror, KaTeX and Mermaid and their communities; each remains under its own licence.
 
 ## License
 
